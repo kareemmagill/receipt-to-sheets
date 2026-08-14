@@ -22,10 +22,15 @@ export const ORDER_SLIP_SCHEMA = {
   type: "object",
   properties: {
     customer_written: { type: "string", description: "Customer/member name exactly as handwritten. Empty string if unreadable." },
+    slip_type: {
+      type: "string",
+      enum: ["", "Bar", "Restaurant"],
+      description: "Which printed slip form this is, based on its heading. 'Order Slip' headed/marked BAR is 'Bar'. 'Food Order Slip' headed/marked Restaurant is 'Restaurant'. Empty string if the heading isn't legible.",
+    },
     order_slip_date: { type: "string", description: "Date exactly as written. Empty string if absent." },
     order_slip_number: {
       type: "string",
-      description: "The slip's own number — usually printed in the top-right corner, following a label like 'NO' or 'NO.'. Do not confuse this with an AR number, table number, or phone number. Empty string if absent.",
+      description: "The slip's own printed number, next to a label like 'NO' or 'NO.'. On a Bar Order Slip it's in the top-right corner; on a Food Order Slip (Restaurant) it's in the bottom-right corner. Do not confuse this with an AR number, table number, or phone number. Empty string if absent.",
     },
     terms: {
       type: "string",
@@ -39,6 +44,7 @@ export const ORDER_SLIP_SCHEMA = {
   },
   required: [
     "customer_written",
+    "slip_type",
     "order_slip_date",
     "order_slip_number",
     "terms",

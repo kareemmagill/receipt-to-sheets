@@ -12,9 +12,8 @@ export interface ItemCodeMatch {
   score: number;
 }
 
-// Below this, don't guess at all — the Item Code Template has real gaps
-// (e.g. the actual "PGYC Club Sandwich" code isn't in it at all), and a
-// wrong guess in real accounting data is worse than leaving it blank.
+// Below this, don't guess at all — a wrong guess in real accounting data is
+// worse than leaving it blank.
 const ITEM_MATCH_THRESHOLD = 0.5;
 
 // Above this, the match is confident enough not to need a second look
@@ -24,17 +23,26 @@ const ITEM_MATCH_THRESHOLD = 0.5;
 // high enough to look confident while actually being wrong.
 export const ITEM_MATCH_CONFIDENT_THRESHOLD = 0.85;
 
-// Item Code Template columns: A=category, B=SalesDesc, ..., F=Item Code
+// Inventory columns: A=(unused), B=Item code, C=Description. Far more
+// complete than the "Item Code Template" tab (1165 rows vs 204 — e.g. it
+// actually has the real "MACLU6" code for "PGYC Club Sandwich", which the
+// template tab was missing entirely). Some codes carry a "CATEGORY:" prefix
+// (only ~6% of rows, inconsistently — some codes appear both with and
+// without it), which is used as a bonus category signal when present but
+// never required, since slip_type (Bar vs Restaurant, from the physical
+// slip's own heading) is the primary class signal now.
 export async function loadItemCodeTemplate(): Promise<ItemCodeEntry[]> {
-  const rows = await readTab("Item Code Template");
+  const rows = await readTab("Inventory");
   return rows
     .slice(1) // header row
-    .filter((r) => r[1] && r[5])
-    .map((r) => ({
-      category: (r[0] ?? "").trim(),
-      salesDesc: (r[1] ?? "").trim(),
-      itemCode: (r[5] ?? "").trim(),
-    }));
+    .filter((r) => r[1] && r[2])
+    .map((r) => {
+      const raw = (r[1] ?? "").trim();
+      const colonIndex = raw.indexOf(":");
+      const category = colonIndex === -1 ? "" : raw.slice(0, colonIndex).trim();
+      const itemCode = colonIndex === -1 ? raw : raw.slice(colonIndex + 1).trim();
+      return { category, salesDesc: (r[2] ?? "").trim(), itemCode };
+    });
 }
 
 export function matchItemCode(written: string, entries: ItemCodeEntry[]): ItemCodeMatch | null {

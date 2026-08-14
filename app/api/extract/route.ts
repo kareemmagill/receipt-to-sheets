@@ -21,7 +21,7 @@ Rules — follow these exactly:
 - Keep repeated items as separate line entries unless the slip clearly writes them as one combined quantity (e.g. "3x Red Horse" written once is one line with qty 3; "Red Horse" written on three separate lines is three lines each with qty 1).
 - If a crossed-out item is fully struck through, omit it from the items list.
 - If a field genuinely cannot be read or is not present on the slip, return an empty string for it — never fabricate a value to fill the field.
-- "order_slip_number" is the slip's own number, usually printed in the top-right corner following a label like "NO" or "NO.". Don't confuse it with an AR number, table number, or phone number.
+- There are two different printed slip forms: a Bar "Order Slip", and a "Food Order Slip" for the Restaurant. Identify which one this is from its heading and set "slip_type" accordingly. This also tells you where to find the slip number: on the Bar Order Slip, "NO"/"NO." is in the top-right corner; on the Food Order Slip (Restaurant), it's in the bottom-right corner. Don't confuse the slip number with an AR number, table number, or phone number.
 - If a "Non-Member" checkbox/marking is ticked on the slip, set "customer_written" to exactly "DIRECT SALES- WALK IN" (the club's account for walk-in/non-member sales), regardless of any other name written on the slip.
 - "terms" must be exactly "COD" or "CREDIT" (or an empty string if you can't tell): look for an explicit written word ("COD", "Credit", "Charge"), a checked/circled box, or another clear marking distinguishing a member charge account (CREDIT) from a cash-paid order (COD).
 - On these slips, Amount = Rate × QTY for each line. If exactly one of "rate" or "amount" is illegible or missing but the other one and "qty" are both clearly legible, you may compute the missing value from that relationship instead of leaving it blank. Do not do this if two or more of the three values are unclear — leave those blank rather than guessing.
@@ -50,6 +50,7 @@ interface RawVisionItem {
 
 interface RawVisionExtraction {
   customer_written?: string;
+  slip_type?: string;
   order_slip_date?: string;
   order_slip_number?: string;
   terms?: string;
@@ -110,6 +111,14 @@ export async function POST(req: Request) {
     const raw: RawVisionExtraction = JSON.parse(textBlock.text);
     const uncertainFields = [...(raw.uncertain_fields ?? [])];
 
+    // The physical slip form (Bar vs Restaurant) is a stronger signal than
+    // guessing Class from an individual item's name, so it takes priority
+    // when the model could read the heading.
+    const slipType = raw.slip_type === "Bar" || raw.slip_type === "Restaurant" ? raw.slip_type : "";
+    if (!slipType) {
+      uncertainFields.push("slip_type (couldn't tell Bar vs Restaurant from the heading — Class guessed per item)");
+    }
+
     // Look up an item code + Restaurant/Bar class for each line, using the
     // live Item Code Template tab. A missing template read shouldn't block
     // the whole extraction — items just come back uncoded for manual entry.
@@ -138,7 +147,7 @@ export async function POST(req: Request) {
         rate: item.rate ?? "",
         amount: item.amount ?? "",
         confidence: item.confidence ?? 0,
-        class: guessClass(description, codeMatch?.entry.category),
+        class: slipType || guessClass(description, codeMatch?.entry.category),
       };
     });
 
