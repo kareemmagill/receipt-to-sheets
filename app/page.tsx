@@ -10,7 +10,10 @@ export default function Home() {
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [extraction, setExtraction] = useState<OrderSlipExtraction | null>(null);
-  const [savedOrder, setSavedOrder] = useState<EditableOrder | null>(null);
+
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [rowsAdded, setRowsAdded] = useState(0);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -19,7 +22,8 @@ export default function Home() {
     setStatus("idle");
     setError(null);
     setExtraction(null);
-    setSavedOrder(null);
+    setSaveStatus("idle");
+    setSaveError(null);
 
     const reader = new FileReader();
     reader.onload = () => setImageDataUrl(reader.result as string);
@@ -56,14 +60,35 @@ export default function Home() {
 
   function handleRetake() {
     setExtraction(null);
-    setSavedOrder(null);
+    setSaveStatus("idle");
+    setSaveError(null);
     setImageDataUrl(null);
   }
 
-  function handleConfirm(order: EditableOrder) {
-    // Phase 9 will write this to the Sales Orders tab. For now, prove the
-    // data shape is right before wiring up the real save.
-    setSavedOrder(order);
+  async function handleConfirm(order: EditableOrder) {
+    setSaveStatus("saving");
+    setSaveError(null);
+
+    try {
+      const res = await fetch("/api/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order }),
+      });
+      const data = await res.json();
+
+      if (!data.ok) {
+        setSaveError(data.error ?? "Unknown error");
+        setSaveStatus("error");
+        return;
+      }
+
+      setRowsAdded(data.rowsAdded);
+      setSaveStatus("success");
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+      setSaveStatus("error");
+    }
   }
 
   return (
@@ -113,28 +138,23 @@ export default function Home() {
         </>
       )}
 
-      {extraction && !savedOrder && (
-        <VerificationForm extraction={extraction} onConfirm={handleConfirm} onRetake={handleRetake} />
+      {extraction && saveStatus !== "success" && (
+        <>
+          {saveStatus === "error" && <p style={{ color: "#b00020" }}>Save failed: {saveError}</p>}
+          <VerificationForm
+            extraction={extraction}
+            onConfirm={handleConfirm}
+            onRetake={handleRetake}
+            saving={saveStatus === "saving"}
+          />
+        </>
       )}
 
-      {savedOrder && (
+      {saveStatus === "success" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <p style={{ color: "#0a7a2f" }}>
-            Confirmed. Saving to Sales Orders comes in Phase 9 — here&apos;s what would be sent:
+            Saved {rowsAdded} row{rowsAdded === 1 ? "" : "s"} to Sales Orders.
           </p>
-          <pre
-            style={{
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-              background: "#f4f4f4",
-              color: "#111",
-              padding: 12,
-              borderRadius: 8,
-              fontSize: 12,
-            }}
-          >
-            {JSON.stringify(savedOrder, null, 2)}
-          </pre>
           <button onClick={handleRetake} style={buttonStyle}>
             Scan Another Slip
           </button>

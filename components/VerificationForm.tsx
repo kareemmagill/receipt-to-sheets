@@ -47,10 +47,12 @@ export default function VerificationForm({
   extraction,
   onConfirm,
   onRetake,
+  saving = false,
 }: {
   extraction: OrderSlipExtraction;
   onConfirm: (order: EditableOrder) => void;
   onRetake: () => void;
+  saving?: boolean;
 }) {
   const [order, setOrder] = useState<EditableOrder>(() => toEditable(extraction));
   const customerName = order.customer_suggested || order.customer_written;
@@ -141,11 +143,11 @@ export default function VerificationForm({
       </div>
 
       <div style={{ display: "flex", gap: 12 }}>
-        <button onClick={onRetake} style={secondaryButtonStyle}>
+        <button onClick={onRetake} disabled={saving} style={secondaryButtonStyle}>
           Retake Photo
         </button>
-        <button onClick={() => onConfirm(order)} style={{ ...primaryButtonStyle, flex: 1 }}>
-          Confirm & Save
+        <button onClick={() => onConfirm(order)} disabled={saving} style={{ ...primaryButtonStyle, flex: 1 }}>
+          {saving ? "Saving…" : "Confirm & Save"}
         </button>
       </div>
     </div>
