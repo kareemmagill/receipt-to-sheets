@@ -20,6 +20,7 @@ export default function Home() {
   const [pendingOrder, setPendingOrder] = useState<EditableOrder | null>(null);
   const [rowsAdded, setRowsAdded] = useState(0);
   const [savedArNumber, setSavedArNumber] = useState("");
+  const [photoWarning, setPhotoWarning] = useState<string | null>(null);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -71,6 +72,7 @@ export default function Home() {
     setSaveError(null);
     setConflictDifferences([]);
     setPendingOrder(null);
+    setPhotoWarning(null);
     setImageDataUrl(null);
   }
 
@@ -84,7 +86,7 @@ export default function Home() {
       const res = await fetch("/api/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order, force }),
+        body: JSON.stringify({ order, force, imageDataUrl }),
       });
       const data = await res.json();
 
@@ -107,6 +109,7 @@ export default function Home() {
 
       setRowsAdded(data.rowsAdded);
       setSavedArNumber(data.arNumber);
+      setPhotoWarning(data.photoWarning ?? null);
       setSaveStatus("success");
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err));
@@ -228,6 +231,9 @@ export default function Home() {
           <p style={{ color: "#0a7a2f" }}>
             Saved {rowsAdded} row{rowsAdded === 1 ? "" : "s"} to Sales Orders as {savedArNumber}.
           </p>
+          {photoWarning && (
+            <p style={{ color: "#8a6d00", fontSize: 12 }}>Photo not archived: {photoWarning}</p>
+          )}
           <button onClick={handleRetake} style={buttonStyle}>
             Scan Another Slip
           </button>

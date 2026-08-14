@@ -93,7 +93,7 @@ export default function BatchImportPage() {
         const saveRes = await fetch("/api/save", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ order }),
+          body: JSON.stringify({ order, imageDataUrl: photo.dataUrl }),
         });
         const saveData = await saveRes.json();
         if (saveData.duplicate) {

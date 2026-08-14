@@ -83,3 +83,33 @@ export async function appendRows(tabName: string, rows: (string | number)[][]) {
     requestBody: { values: rows },
   });
 }
+
+// Creates a new tab with a header row if one matching this name doesn't
+// already exist. Used for auxiliary tabs the app manages itself (e.g. the
+// photo log) — never for the existing Sales Orders / Customers / etc. tabs,
+// whose structure the app must never change.
+export async function ensureTabExists(tabName: string, headerRow: string[]) {
+  if (!SHEET_ID) throw new Error("Missing GOOGLE_SHEET_ID env var");
+
+  try {
+    await resolveTabTitle(tabName);
+    return; // already exists
+  } catch {
+    // fall through and create it
+  }
+
+  const sheets = getSheetsClient();
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    requestBody: { requests: [{ addSheet: { properties: { title: tabName } } }] },
+  });
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: `${quoteTabName(tabName)}!A1`,
+    valueInputOption: "RAW",
+    requestBody: { values: [headerRow] },
+  });
+
+  tabTitleCache = null; // so the next resolveTabTitle picks up the new tab
+}
