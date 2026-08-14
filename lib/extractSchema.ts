@@ -66,4 +66,7 @@ export interface OrderSlipExtraction {
   items: OrderSlipItem[];
   overall_confidence: number;
   uncertain_fields: string[];
+  // Filled in server-side by fuzzy-matching against the Customers tab —
+  // not part of what the vision model returns.
+  customer_matches?: { name: string; score: number }[];
 }

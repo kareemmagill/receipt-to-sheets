@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { ORDER_SLIP_SCHEMA, type OrderSlipExtraction } from "@/lib/extractSchema";
+import { readTab } from "@/lib/googleSheets";
+import { matchCustomer } from "@/lib/customerMatch";
 
 const client = new Anthropic();
+
+// A match below this score is too weak to auto-suggest — the raw
+// handwriting is shown instead and the user picks manually.
+const CUSTOMER_MATCH_THRESHOLD = 0.5;
 
 const SYSTEM_PROMPT = `You are reading a photograph of a handwritten bar / restaurant / yacht club order slip (a sales/order slip from a members' club, e.g. PGYC).
 
@@ -41,7 +47,7 @@ export async function POST(req: Request) {
     const { mediaType, data } = parseDataUrl(imageDataUrl);
 
     const response = await client.messages.create({
-      model: "claude-opus-5",
+      model: "claude-haiku-4-5",
       max_tokens: 8000,
       system: SYSTEM_PROMPT,
       messages: [
@@ -78,6 +84,22 @@ export async function POST(req: Request) {
     }
 
     const extraction: OrderSlipExtraction = JSON.parse(textBlock.text);
+
+    if (extraction.customer_written) {
+      try {
+        const customerRows = await readTab("Customers");
+        const names = customerRows.map((row) => row[0]).filter((name): name is string => Boolean(name?.trim()));
+        const matches = matchCustomer(extraction.customer_written, names);
+
+        extraction.customer_matches = matches;
+        extraction.customer_suggested =
+          matches[0] && matches[0].score >= CUSTOMER_MATCH_THRESHOLD ? matches[0].name : "";
+      } catch {
+        // Customer lookup failing shouldn't block the extraction — the user
+        // can still type the name manually on the verification screen.
+        extraction.customer_matches = [];
+      }
+    }
 
     return NextResponse.json({ ok: true, extraction });
   } catch (err) {

@@ -54,6 +54,7 @@ export default function VerificationForm({
 }) {
   const [order, setOrder] = useState<EditableOrder>(() => toEditable(extraction));
   const customerName = order.customer_suggested || order.customer_written;
+  const alternates = (extraction.customer_matches ?? []).filter((m) => m.name !== customerName);
 
   function updateField<K extends keyof EditableOrder>(field: K, value: EditableOrder[K]) {
     setOrder((prev) => ({ ...prev, [field]: value }));
@@ -77,7 +78,25 @@ export default function VerificationForm({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <Field label="Customer / Name" value={customerName} onChange={(v) => updateField("customer_suggested", v)} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <Field label="Customer / Name" value={customerName} onChange={(v) => updateField("customer_suggested", v)} />
+          {order.customer_written && order.customer_written !== customerName && (
+            <span style={{ fontSize: 12, color: "#777" }}>Handwriting read as: &ldquo;{order.customer_written}&rdquo;</span>
+          )}
+          {alternates.length > 0 && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {alternates.map((match) => (
+                <button
+                  key={match.name}
+                  onClick={() => updateField("customer_suggested", match.name)}
+                  style={chipButtonStyle}
+                >
+                  {match.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <Field label="Order Slip Date" value={order.order_slip_date} onChange={(v) => updateField("order_slip_date", v)} />
         <Field label="Order Slip Number" value={order.order_slip_number} onChange={(v) => updateField("order_slip_number", v)} />
         <Field label="AR Number" value={order.ar_number} onChange={(v) => updateField("ar_number", v)} />
@@ -175,6 +194,16 @@ const secondaryButtonStyle: React.CSSProperties = {
   borderRadius: 8,
   border: "1px solid #999",
   background: "#fff",
+  color: "#333",
+  cursor: "pointer",
+};
+
+const chipButtonStyle: React.CSSProperties = {
+  padding: "4px 10px",
+  fontSize: 12,
+  borderRadius: 999,
+  border: "1px solid #999",
+  background: "#f4f4f4",
   color: "#333",
   cursor: "pointer",
 };
