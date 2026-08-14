@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import type { OrderSlipExtraction } from "@/lib/extractSchema";
+import VerificationForm, { type EditableOrder } from "@/components/VerificationForm";
 
 export default function Home() {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -9,6 +10,7 @@ export default function Home() {
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [extraction, setExtraction] = useState<OrderSlipExtraction | null>(null);
+  const [savedOrder, setSavedOrder] = useState<EditableOrder | null>(null);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -17,6 +19,7 @@ export default function Home() {
     setStatus("idle");
     setError(null);
     setExtraction(null);
+    setSavedOrder(null);
 
     const reader = new FileReader();
     reader.onload = () => setImageDataUrl(reader.result as string);
@@ -51,6 +54,18 @@ export default function Home() {
     }
   }
 
+  function handleRetake() {
+    setExtraction(null);
+    setSavedOrder(null);
+    setImageDataUrl(null);
+  }
+
+  function handleConfirm(order: EditableOrder) {
+    // Phase 9 will write this to the Sales Orders tab. For now, prove the
+    // data shape is right before wiring up the real save.
+    setSavedOrder(order);
+  }
+
   return (
     <main
       style={{
@@ -64,50 +79,66 @@ export default function Home() {
     >
       <h1 style={{ fontSize: 20 }}>PGYC Order Slip Scanner</h1>
 
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={handleFileChange}
-        style={{ display: "none" }}
-      />
+      {!extraction && (
+        <>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleFileChange}
+            style={{ display: "none" }}
+          />
 
-      <button onClick={() => inputRef.current?.click()} style={buttonStyle}>
-        {imageDataUrl ? "Retake Photo" : "Take Photo"}
-      </button>
+          <button onClick={() => inputRef.current?.click()} style={buttonStyle}>
+            {imageDataUrl ? "Retake Photo" : "Take Photo"}
+          </button>
 
-      {imageDataUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={imageDataUrl}
-          alt="Captured order slip"
-          style={{ width: "100%", borderRadius: 8, border: "1px solid #ccc" }}
-        />
+          {imageDataUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={imageDataUrl}
+              alt="Captured order slip"
+              style={{ width: "100%", borderRadius: 8, border: "1px solid #ccc" }}
+            />
+          )}
+
+          {imageDataUrl && (
+            <button onClick={handleProcess} disabled={status === "loading"} style={buttonStyle}>
+              {status === "loading" ? "Reading slip…" : "Process Order Slip"}
+            </button>
+          )}
+
+          {error && <p style={{ color: "#b00020" }}>Error: {error}</p>}
+        </>
       )}
 
-      {imageDataUrl && (
-        <button onClick={handleProcess} disabled={status === "loading"} style={buttonStyle}>
-          {status === "loading" ? "Reading slip…" : "Process Order Slip"}
-        </button>
+      {extraction && !savedOrder && (
+        <VerificationForm extraction={extraction} onConfirm={handleConfirm} onRetake={handleRetake} />
       )}
 
-      {error && <p style={{ color: "#b00020" }}>Error: {error}</p>}
-
-      {extraction && (
-        <pre
-          style={{
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-            background: "#f4f4f4",
-            color: "#111",
-            padding: 12,
-            borderRadius: 8,
-            fontSize: 12,
-          }}
-        >
-          {JSON.stringify(extraction, null, 2)}
-        </pre>
+      {savedOrder && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <p style={{ color: "#0a7a2f" }}>
+            Confirmed. Saving to Sales Orders comes in Phase 9 — here&apos;s what would be sent:
+          </p>
+          <pre
+            style={{
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              background: "#f4f4f4",
+              color: "#111",
+              padding: 12,
+              borderRadius: 8,
+              fontSize: 12,
+            }}
+          >
+            {JSON.stringify(savedOrder, null, 2)}
+          </pre>
+          <button onClick={handleRetake} style={buttonStyle}>
+            Scan Another Slip
+          </button>
+        </div>
       )}
     </main>
   );

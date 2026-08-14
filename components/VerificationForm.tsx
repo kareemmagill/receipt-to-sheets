@@ -1,0 +1,190 @@
+"use client";
+
+import { useState } from "react";
+import type { OrderSlipExtraction, OrderSlipItem } from "@/lib/extractSchema";
+
+export type EditableItem = OrderSlipItem & { id: string };
+export type EditableOrder = Omit<OrderSlipExtraction, "items" | "uncertain_fields" | "overall_confidence"> & {
+  items: EditableItem[];
+};
+
+// crypto.randomUUID() requires a secure context (HTTPS or localhost) and is
+// unavailable when testing over plain HTTP on a phone via LAN IP.
+let nextId = 0;
+function makeId() {
+  nextId += 1;
+  return `item-${Date.now()}-${nextId}`;
+}
+
+function toEditable(extraction: OrderSlipExtraction): EditableOrder {
+  return {
+    customer_written: extraction.customer_written,
+    customer_suggested: extraction.customer_suggested,
+    order_slip_date: extraction.order_slip_date,
+    order_slip_number: extraction.order_slip_number,
+    ar_number: extraction.ar_number,
+    terms: extraction.terms,
+    memo: extraction.memo,
+    class: extraction.class,
+    items: extraction.items.map((item) => ({ ...item, id: makeId() })),
+  };
+}
+
+function emptyItem(): EditableItem {
+  return {
+    id: makeId(),
+    qty: "",
+    invoice_class: "",
+    item: "",
+    description: "",
+    rate: "",
+    amount: "",
+    confidence: 1,
+  };
+}
+
+export default function VerificationForm({
+  extraction,
+  onConfirm,
+  onRetake,
+}: {
+  extraction: OrderSlipExtraction;
+  onConfirm: (order: EditableOrder) => void;
+  onRetake: () => void;
+}) {
+  const [order, setOrder] = useState<EditableOrder>(() => toEditable(extraction));
+  const customerName = order.customer_suggested || order.customer_written;
+
+  function updateField<K extends keyof EditableOrder>(field: K, value: EditableOrder[K]) {
+    setOrder((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function updateItem(id: string, field: keyof OrderSlipItem, value: string) {
+    setOrder((prev) => ({
+      ...prev,
+      items: prev.items.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
+    }));
+  }
+
+  function deleteItem(id: string) {
+    setOrder((prev) => ({ ...prev, items: prev.items.filter((item) => item.id !== id) }));
+  }
+
+  function addItem() {
+    setOrder((prev) => ({ ...prev, items: [...prev.items, emptyItem()] }));
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <Field label="Customer / Name" value={customerName} onChange={(v) => updateField("customer_suggested", v)} />
+        <Field label="Order Slip Date" value={order.order_slip_date} onChange={(v) => updateField("order_slip_date", v)} />
+        <Field label="Order Slip Number" value={order.order_slip_number} onChange={(v) => updateField("order_slip_number", v)} />
+        <Field label="AR Number" value={order.ar_number} onChange={(v) => updateField("ar_number", v)} />
+        <Field label="Terms" value={order.terms} onChange={(v) => updateField("terms", v)} />
+        <Field label="Memo" value={order.memo} onChange={(v) => updateField("memo", v)} />
+        <Field label="Class" value={order.class} onChange={(v) => updateField("class", v)} />
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <h2 style={{ fontSize: 16 }}>Items</h2>
+        {order.items.map((item, index) => (
+          <div
+            key={item.id}
+            style={{
+              border: "1px solid #ccc",
+              borderRadius: 8,
+              padding: 12,
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <strong style={{ fontSize: 13, color: "#555" }}>Item {index + 1}</strong>
+              <button onClick={() => deleteItem(item.id)} style={deleteButtonStyle}>
+                Delete
+              </button>
+            </div>
+            <Field label="Item" value={item.item} onChange={(v) => updateItem(item.id, "item", v)} />
+            <Field label="Description" value={item.description} onChange={(v) => updateItem(item.id, "description", v)} />
+            <div style={{ display: "flex", gap: 8 }}>
+              <Field label="QTY" value={item.qty} onChange={(v) => updateItem(item.id, "qty", v)} />
+              <Field label="Rate" value={item.rate} onChange={(v) => updateItem(item.id, "rate", v)} />
+              <Field label="Amount" value={item.amount} onChange={(v) => updateItem(item.id, "amount", v)} />
+            </div>
+            <Field label="Invoice Class" value={item.invoice_class} onChange={(v) => updateItem(item.id, "invoice_class", v)} />
+          </div>
+        ))}
+        <button onClick={addItem} style={secondaryButtonStyle}>
+          + Add Item
+        </button>
+      </div>
+
+      <div style={{ display: "flex", gap: 12 }}>
+        <button onClick={onRetake} style={secondaryButtonStyle}>
+          Retake Photo
+        </button>
+        <button onClick={() => onConfirm(order)} style={{ ...primaryButtonStyle, flex: 1 }}>
+          Confirm & Save
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, fontSize: 13, color: "#333" }}>
+      {label}
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          padding: "10px 12px",
+          fontSize: 15,
+          borderRadius: 6,
+          border: "1px solid #ccc",
+        }}
+      />
+    </label>
+  );
+}
+
+const primaryButtonStyle: React.CSSProperties = {
+  padding: "14px 20px",
+  fontSize: 16,
+  borderRadius: 8,
+  border: "1px solid #333",
+  background: "#171717",
+  color: "#fff",
+  cursor: "pointer",
+};
+
+const secondaryButtonStyle: React.CSSProperties = {
+  padding: "10px 16px",
+  fontSize: 14,
+  borderRadius: 8,
+  border: "1px solid #999",
+  background: "#fff",
+  color: "#333",
+  cursor: "pointer",
+};
+
+const deleteButtonStyle: React.CSSProperties = {
+  padding: "4px 10px",
+  fontSize: 12,
+  borderRadius: 6,
+  border: "1px solid #b00020",
+  background: "#fff",
+  color: "#b00020",
+  cursor: "pointer",
+};
