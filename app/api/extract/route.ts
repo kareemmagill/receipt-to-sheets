@@ -22,6 +22,7 @@ Rules — follow these exactly:
 - If a crossed-out item is fully struck through, omit it from the items list.
 - If a field genuinely cannot be read or is not present on the slip, return an empty string for it — never fabricate a value to fill the field.
 - "order_slip_number" is the slip's own number, usually printed in the top-right corner following a label like "NO" or "NO.". Don't confuse it with an AR number, table number, or phone number.
+- If a "Non-Member" checkbox/marking is ticked on the slip, set "customer_written" to exactly "DIRECT SALES- WALK IN" (the club's account for walk-in/non-member sales), regardless of any other name written on the slip.
 - "terms" must be exactly "COD" or "CREDIT" (or an empty string if you can't tell): look for an explicit written word ("COD", "Credit", "Charge"), a checked/circled box, or another clear marking distinguishing a member charge account (CREDIT) from a cash-paid order (COD).
 - On these slips, Amount = Rate × QTY for each line. If exactly one of "rate" or "amount" is illegible or missing but the other one and "qty" are both clearly legible, you may compute the missing value from that relationship instead of leaving it blank. Do not do this if two or more of the three values are unclear — leave those blank rather than guessing.
 - For each item line, set "confidence" between 0 and 1 for how sure you are of that line's reading.
