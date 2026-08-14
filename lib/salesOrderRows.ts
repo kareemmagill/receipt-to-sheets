@@ -6,14 +6,24 @@ import type { EditableOrder } from "@/components/VerificationForm";
 // Class column appearing twice (B and H). Class is per-item (Restaurant or
 // Bar, depending on the item), not per-order, so rows for the same order
 // can carry different Class values.
+// A leading apostrophe tells Sheets' USER_ENTERED parser to store the value
+// as literal text instead of auto-parsing it — without this, a date-looking
+// string like "8/27/25" gets converted into a date serial number, which
+// then displays as a raw number (e.g. "46248") whenever the cell doesn't
+// happen to inherit a date number format. The apostrophe itself never shows
+// up in the stored/displayed value.
+function asLiteralText(value: string): string {
+  return `'${value}`;
+}
+
 export function buildSalesOrderRows(order: EditableOrder, arNumber: string): (string | number)[][] {
   const customerName = order.customer_suggested || order.customer_written;
 
   return order.items.map((item) => [
     customerName,
     item.class,
-    order.order_slip_date,
-    order.order_slip_number,
+    asLiteralText(order.order_slip_date),
+    asLiteralText(order.order_slip_number),
     arNumber,
     order.terms,
     order.memo,
