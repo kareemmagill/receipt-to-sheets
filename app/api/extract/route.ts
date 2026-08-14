@@ -3,7 +3,12 @@ import Anthropic from "@anthropic-ai/sdk";
 import { ORDER_SLIP_SCHEMA, type OrderSlipExtraction, type OrderSlipItem } from "@/lib/extractSchema";
 import { readTab } from "@/lib/googleSheets";
 import { matchCustomer } from "@/lib/customerMatch";
-import { loadItemCodeTemplate, matchItemCode, guessClass, ITEM_MATCH_CONFIDENT_THRESHOLD } from "@/lib/itemCodeMatch";
+import {
+  loadItemCodeTemplate,
+  matchItemCodeCandidates,
+  guessClass,
+  ITEM_MATCH_CONFIDENT_THRESHOLD,
+} from "@/lib/itemCodeMatch";
 
 const client = new Anthropic();
 
@@ -131,7 +136,8 @@ export async function POST(req: Request) {
 
     const items: OrderSlipItem[] = (raw.items ?? []).map((item, index) => {
       const description = item.description ?? "";
-      const codeMatch = matchItemCode(description, itemTemplate);
+      const candidates = matchItemCodeCandidates(description, itemTemplate, 5);
+      const codeMatch = candidates[0] && candidates[0].score >= 0.5 ? candidates[0] : null;
 
       if (!codeMatch) {
         uncertainFields.push(`items[${index}].item (no confident code match — check manually)`);
@@ -148,6 +154,11 @@ export async function POST(req: Request) {
         amount: item.amount ?? "",
         confidence: item.confidence ?? 0,
         class: slipType || guessClass(description, codeMatch?.entry.category),
+        candidates: candidates.map((c) => ({
+          description: c.entry.salesDesc,
+          itemCode: c.entry.itemCode,
+          score: c.score,
+        })),
       };
     });
 

@@ -65,6 +65,9 @@ export interface OrderSlipItem {
   amount: string;
   confidence: number;
   class: string; // "Restaurant" | "Bar" | "" — derived server-side per item
+  // Best-guess Inventory matches for this line — filled in server-side, not
+  // part of what the vision model returns.
+  candidates?: { description: string; itemCode: string; score: number }[];
 }
 
 export interface OrderSlipExtraction {

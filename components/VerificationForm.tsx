@@ -96,6 +96,15 @@ export default function VerificationForm({
     }));
   }
 
+  function applyItemCandidate(id: string, candidate: { description: string; itemCode: string }) {
+    setOrder((prev) => ({
+      ...prev,
+      items: prev.items.map((item) =>
+        item.id === id ? { ...item, description: candidate.description, item: candidate.itemCode } : item
+      ),
+    }));
+  }
+
   function deleteItem(id: string) {
     setOrder((prev) => ({ ...prev, items: prev.items.filter((item) => item.id !== id) }));
   }
@@ -234,6 +243,24 @@ export default function VerificationForm({
             </div>
             <Field label="Item" value={item.item} onChange={(v) => updateItem(item.id, "item", v)} />
             <Field label="Description" value={item.description} onChange={(v) => updateItem(item.id, "description", v)} />
+            {(item.candidates ?? [])
+              .filter((c) => c.score >= 0.3 && c.description !== item.description).length > 0 && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {(item.candidates ?? [])
+                  .filter((c) => c.score >= 0.3 && c.description !== item.description)
+                  .slice(0, 4)
+                  .map((c) => (
+                    <button
+                      key={c.itemCode}
+                      type="button"
+                      onClick={() => applyItemCandidate(item.id, c)}
+                      style={chipButtonStyle}
+                    >
+                      {c.description} ({Math.round(c.score * 100)}%)
+                    </button>
+                  ))}
+              </div>
+            )}
             <div style={{ display: "flex", gap: 8 }}>
               <Field label="QTY" value={item.qty} onChange={(v) => updateItem(item.id, "qty", v)} />
               <Field label="Rate" value={item.rate} onChange={(v) => updateItem(item.id, "rate", v)} />
@@ -347,6 +374,16 @@ const secondaryButtonStyle: React.CSSProperties = {
   borderRadius: 8,
   border: "1px solid #999",
   background: "#fff",
+  color: "#333",
+  cursor: "pointer",
+};
+
+const chipButtonStyle: React.CSSProperties = {
+  padding: "4px 10px",
+  fontSize: 12,
+  borderRadius: 999,
+  border: "1px solid #999",
+  background: "#f4f4f4",
   color: "#333",
   cursor: "pointer",
 };

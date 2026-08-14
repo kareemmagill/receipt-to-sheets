@@ -12,8 +12,12 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [extraction, setExtraction] = useState<OrderSlipExtraction | null>(null);
 
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error" | "duplicate" | "conflict">(
+    "idle"
+  );
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [conflictDifferences, setConflictDifferences] = useState<string[]>([]);
+  const [pendingOrder, setPendingOrder] = useState<EditableOrder | null>(null);
   const [rowsAdded, setRowsAdded] = useState(0);
   const [savedArNumber, setSavedArNumber] = useState("");
 
@@ -26,6 +30,7 @@ export default function Home() {
     setExtraction(null);
     setSaveStatus("idle");
     setSaveError(null);
+    setConflictDifferences([]);
 
     const reader = new FileReader();
     reader.onload = () => setImageDataUrl(reader.result as string);
@@ -64,21 +69,36 @@ export default function Home() {
     setExtraction(null);
     setSaveStatus("idle");
     setSaveError(null);
+    setConflictDifferences([]);
+    setPendingOrder(null);
     setImageDataUrl(null);
   }
 
-  async function handleConfirm(order: EditableOrder) {
+  async function handleConfirm(order: EditableOrder, force = false) {
     setSaveStatus("saving");
     setSaveError(null);
+    setConflictDifferences([]);
+    setPendingOrder(order);
 
     try {
       const res = await fetch("/api/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order }),
+        body: JSON.stringify({ order, force }),
       });
       const data = await res.json();
 
+      if (data.duplicate) {
+        setSaveError(data.error ?? "Already recorded");
+        setSaveStatus("duplicate");
+        return;
+      }
+      if (data.conflict) {
+        setSaveError(data.error ?? "Slip number already exists with different data");
+        setConflictDifferences(data.differences ?? []);
+        setSaveStatus("conflict");
+        return;
+      }
       if (!data.ok) {
         setSaveError(data.error ?? "Unknown error");
         setSaveStatus("error");
@@ -151,16 +171,56 @@ export default function Home() {
         </>
       )}
 
-      {extraction && saveStatus !== "success" && (
+      {extraction && saveStatus !== "success" && saveStatus !== "duplicate" && (
         <>
           {saveStatus === "error" && <p style={{ color: "#b00020" }}>Save failed: {saveError}</p>}
+          {saveStatus === "conflict" && (
+            <div
+              style={{
+                background: "#fdecea",
+                border: "1px solid #d32f2f",
+                borderRadius: 8,
+                padding: "10px 12px",
+                fontSize: 12,
+                color: "#7a1f1f",
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+              }}
+            >
+              <strong>{saveError}</strong>
+              {conflictDifferences.length > 0 && (
+                <ul style={{ margin: 0, padding: "0 0 0 18px" }}>
+                  {conflictDifferences.map((d) => (
+                    <li key={d}>{d}</li>
+                  ))}
+                </ul>
+              )}
+              <span>Fix the fields below to match, or save anyway if this is genuinely a different order.</span>
+              <button
+                onClick={() => pendingOrder && handleConfirm(pendingOrder, true)}
+                style={{ ...buttonStyle, background: "#d32f2f", alignSelf: "flex-start" }}
+              >
+                Save Anyway
+              </button>
+            </div>
+          )}
           <VerificationForm
             extraction={extraction}
-            onConfirm={handleConfirm}
+            onConfirm={(order) => handleConfirm(order)}
             onRetake={handleRetake}
             saving={saveStatus === "saving"}
           />
         </>
+      )}
+
+      {saveStatus === "duplicate" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <p style={{ color: "#555" }}>{saveError}</p>
+          <button onClick={handleRetake} style={buttonStyle}>
+            Scan Another Slip
+          </button>
+        </div>
       )}
 
       {saveStatus === "success" && (

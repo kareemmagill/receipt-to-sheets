@@ -45,14 +45,17 @@ export async function loadItemCodeTemplate(): Promise<ItemCodeEntry[]> {
     });
 }
 
-export function matchItemCode(written: string, entries: ItemCodeEntry[]): ItemCodeMatch | null {
-  if (!written.trim() || entries.length === 0) return null;
+export function matchItemCodeCandidates(written: string, entries: ItemCodeEntry[], topN = 5): ItemCodeMatch[] {
+  if (!written.trim() || entries.length === 0) return [];
 
-  let best: ItemCodeMatch | null = null;
-  for (const entry of entries) {
-    const score = scoreAgainst(written, entry.salesDesc);
-    if (!best || score > best.score) best = { entry, score };
-  }
+  return entries
+    .map((entry) => ({ entry, score: scoreAgainst(written, entry.salesDesc) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, topN);
+}
+
+export function matchItemCode(written: string, entries: ItemCodeEntry[]): ItemCodeMatch | null {
+  const [best] = matchItemCodeCandidates(written, entries, 1);
   return best && best.score >= ITEM_MATCH_THRESHOLD ? best : null;
 }
 
