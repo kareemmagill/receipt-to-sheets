@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { OrderSlipExtraction, OrderSlipItem } from "@/lib/extractSchema";
+import { makeId } from "@/lib/makeId";
 
 export type EditableItem = OrderSlipItem & { id: string };
 export type EditableOrder = Omit<OrderSlipExtraction, "items" | "uncertain_fields" | "overall_confidence"> & {
@@ -11,14 +12,6 @@ export type EditableOrder = Omit<OrderSlipExtraction, "items" | "uncertain_field
 const MANUAL_CUSTOMER = "__MANUAL__";
 const CLASS_OPTIONS = ["Restaurant", "Bar"];
 const TERMS_OPTIONS = ["COD", "CREDIT"];
-
-// crypto.randomUUID() requires a secure context (HTTPS or localhost) and is
-// unavailable when testing over plain HTTP on a phone via LAN IP.
-let nextId = 0;
-function makeId() {
-  nextId += 1;
-  return `item-${Date.now()}-${nextId}`;
-}
 
 function toEditable(extraction: OrderSlipExtraction): EditableOrder {
   return {

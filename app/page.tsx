@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import type { OrderSlipExtraction } from "@/lib/extractSchema";
 import VerificationForm, { type EditableOrder } from "@/components/VerificationForm";
 
@@ -104,7 +105,17 @@ export default function Home() {
         gap: 16,
       }}
     >
-      <h1 style={{ fontSize: 20 }}>PGYC Order Slip Scanner</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h1 style={{ fontSize: 20 }}>PGYC Order Slip Scanner</h1>
+        <div style={{ display: "flex", gap: 12, fontSize: 13 }}>
+          <Link href="/reports" style={{ color: "#555" }}>
+            Reports
+          </Link>
+          <Link href="/batch" style={{ color: "#555" }}>
+            Batch Import
+          </Link>
+        </div>
+      </div>
 
       {!extraction && (
         <>
