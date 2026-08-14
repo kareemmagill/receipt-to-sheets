@@ -30,6 +30,15 @@ function toEditable(extraction: OrderSlipExtraction): EditableOrder {
   };
 }
 
+function parseNumeric(s: string): number | null {
+  const n = parseFloat(s.replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+function formatAmount(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(2);
+}
+
 function emptyItem(): EditableItem {
   return {
     id: makeId(),
@@ -65,7 +74,21 @@ export default function VerificationForm({
   function updateItem(id: string, field: keyof OrderSlipItem, value: string) {
     setOrder((prev) => ({
       ...prev,
-      items: prev.items.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
+      items: prev.items.map((item) => {
+        if (item.id !== id) return item;
+        const updated = { ...item, [field]: value };
+        // Amount = Rate x QTY. Recalculate Amount when either changes, but
+        // leave it alone if the user edits Amount directly — that edit wins
+        // until QTY or Rate changes again.
+        if (field === "qty" || field === "rate") {
+          const qty = parseNumeric(updated.qty);
+          const rate = parseNumeric(updated.rate);
+          if (qty !== null && rate !== null) {
+            updated.amount = formatAmount(qty * rate);
+          }
+        }
+        return updated;
+      }),
     }));
   }
 

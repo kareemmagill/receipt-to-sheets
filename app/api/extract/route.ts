@@ -20,6 +20,7 @@ Rules — follow these exactly:
 - Keep repeated items as separate line entries unless the slip clearly writes them as one combined quantity (e.g. "3x Red Horse" written once is one line with qty 3; "Red Horse" written on three separate lines is three lines each with qty 1).
 - If a crossed-out item is fully struck through, omit it from the items list.
 - If a field genuinely cannot be read or is not present on the slip, return an empty string for it — never fabricate a value to fill the field.
+- On these slips, Amount = Rate × QTY for each line. If exactly one of "rate" or "amount" is illegible or missing but the other one and "qty" are both clearly legible, you may compute the missing value from that relationship instead of leaving it blank. Do not do this if two or more of the three values are unclear — leave those blank rather than guessing.
 - Set "customer_suggested" to an empty string always — that field is filled in later by the app, not by you.
 - For each item line, set "confidence" between 0 and 1 for how sure you are of that line's reading.
 - Set "overall_confidence" between 0 and 1 for the whole extraction.
