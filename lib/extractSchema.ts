@@ -23,7 +23,10 @@ export const ORDER_SLIP_SCHEMA = {
   properties: {
     customer_written: { type: "string", description: "Customer/member name exactly as handwritten. Empty string if unreadable." },
     order_slip_date: { type: "string", description: "Date exactly as written. Empty string if absent." },
-    order_slip_number: { type: "string", description: "Order slip number exactly as written. Empty string if absent." },
+    order_slip_number: {
+      type: "string",
+      description: "The slip's own number — usually printed in the top-right corner, following a label like 'NO' or 'NO.'. Do not confuse this with an AR number, table number, or phone number. Empty string if absent.",
+    },
     terms: {
       type: "string",
       enum: ["", "COD", "CREDIT"],
