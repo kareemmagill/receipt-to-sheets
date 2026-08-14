@@ -5,7 +5,6 @@ export const ORDER_SLIP_ITEM_SCHEMA = {
   type: "object",
   properties: {
     qty: { type: "string", description: "Quantity as written, e.g. '1' or '2'." },
-    invoice_class: { type: "string", description: "Empty string if not present on the slip." },
     description: {
       type: "string",
       description: "The item/food/drink name exactly as handwritten, e.g. 'SMA', 'Heineken Green Can', 'Club Sandwich'. This identifies what was ordered.",
@@ -14,7 +13,7 @@ export const ORDER_SLIP_ITEM_SCHEMA = {
     amount: { type: "string", description: "Line total as written. Empty string if illegible or absent." },
     confidence: { type: "number", description: "0 to 1: how confident the reading of this line is." },
   },
-  required: ["qty", "invoice_class", "description", "rate", "amount", "confidence"],
+  required: ["qty", "description", "rate", "amount", "confidence"],
   additionalProperties: false,
 };
 

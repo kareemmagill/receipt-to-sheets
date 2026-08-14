@@ -46,7 +46,6 @@ function parseDataUrl(dataUrl: string): { mediaType: string; data: string } {
 
 interface RawVisionItem {
   qty?: string;
-  invoice_class?: string;
   description?: string;
   rate?: string;
   amount?: string;
@@ -145,15 +144,19 @@ export async function POST(req: Request) {
         uncertainFields.push(`items[${index}].item (partial code match — please verify)`);
       }
 
+      // Invoice Class is always the same Restaurant/Bar value as Class —
+      // confirmed against the real sheet data, where they're always equal.
+      const itemClass = slipType || guessClass(description, codeMatch?.entry.category);
+
       return {
         qty: item.qty ?? "",
-        invoice_class: item.invoice_class ?? "",
+        invoice_class: itemClass,
         item: codeMatch ? codeMatch.entry.itemCode : "",
         description,
         rate: item.rate ?? "",
         amount: item.amount ?? "",
         confidence: item.confidence ?? 0,
-        class: slipType || guessClass(description, codeMatch?.entry.category),
+        class: itemClass,
         candidates: candidates.map((c) => ({
           description: c.entry.salesDesc,
           itemCode: c.entry.itemCode,

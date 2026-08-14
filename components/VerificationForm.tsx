@@ -81,15 +81,20 @@ export default function VerificationForm({
       items: prev.items.map((item) => {
         if (item.id !== id) return item;
         const updated = { ...item, [field]: value };
-        // Amount = Rate x QTY. Recalculate Amount when either changes, but
-        // leave it alone if the user edits Amount directly — that edit wins
-        // until QTY or Rate changes again.
-        if (field === "qty" || field === "rate") {
+        // Rate = Amount / QTY. QTY and Amount are usually what's actually
+        // written on the slip; Rate is recalculated from them, but leave it
+        // alone if the user edits Rate directly — that edit wins until QTY
+        // or Amount changes again.
+        if (field === "qty" || field === "amount") {
           const qty = parseNumeric(updated.qty);
-          const rate = parseNumeric(updated.rate);
-          if (qty !== null && rate !== null) {
-            updated.amount = formatAmount(qty * rate);
+          const amount = parseNumeric(updated.amount);
+          if (qty !== null && qty !== 0 && amount !== null) {
+            updated.rate = formatAmount(amount / qty);
           }
+        }
+        // Invoice Class always mirrors Class.
+        if (field === "class") {
+          updated.invoice_class = value;
         }
         return updated;
       }),
@@ -273,7 +278,12 @@ export default function VerificationForm({
                 options={CLASS_OPTIONS}
                 onChange={(v) => updateItem(item.id, "class", v)}
               />
-              <Field label="Invoice Class" value={item.invoice_class} onChange={(v) => updateItem(item.id, "invoice_class", v)} />
+              <SelectField
+                label="Invoice Class"
+                value={item.invoice_class}
+                options={CLASS_OPTIONS}
+                onChange={(v) => updateItem(item.id, "invoice_class", v)}
+              />
             </div>
           </div>
         ))}
