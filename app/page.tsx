@@ -14,6 +14,7 @@ export default function Home() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [rowsAdded, setRowsAdded] = useState(0);
+  const [savedArNumber, setSavedArNumber] = useState("");
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -84,6 +85,7 @@ export default function Home() {
       }
 
       setRowsAdded(data.rowsAdded);
+      setSavedArNumber(data.arNumber);
       setSaveStatus("success");
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err));
@@ -153,7 +155,7 @@ export default function Home() {
       {saveStatus === "success" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <p style={{ color: "#0a7a2f" }}>
-            Saved {rowsAdded} row{rowsAdded === 1 ? "" : "s"} to Sales Orders.
+            Saved {rowsAdded} row{rowsAdded === 1 ? "" : "s"} to Sales Orders as {savedArNumber}.
           </p>
           <button onClick={handleRetake} style={buttonStyle}>
             Scan Another Slip

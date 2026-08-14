@@ -8,6 +8,10 @@ export type EditableOrder = Omit<OrderSlipExtraction, "items" | "uncertain_field
   items: EditableItem[];
 };
 
+const MANUAL_CUSTOMER = "__MANUAL__";
+const CLASS_OPTIONS = ["Restaurant", "Bar"];
+const TERMS_OPTIONS = ["COD", "CREDIT"];
+
 // crypto.randomUUID() requires a secure context (HTTPS or localhost) and is
 // unavailable when testing over plain HTTP on a phone via LAN IP.
 let nextId = 0;
@@ -22,10 +26,8 @@ function toEditable(extraction: OrderSlipExtraction): EditableOrder {
     customer_suggested: extraction.customer_suggested,
     order_slip_date: extraction.order_slip_date,
     order_slip_number: extraction.order_slip_number,
-    ar_number: extraction.ar_number,
     terms: extraction.terms,
     memo: extraction.memo,
-    class: extraction.class,
     items: extraction.items.map((item) => ({ ...item, id: makeId() })),
   };
 }
@@ -49,6 +51,7 @@ function emptyItem(): EditableItem {
     rate: "",
     amount: "",
     confidence: 1,
+    class: "",
   };
 }
 
@@ -64,8 +67,16 @@ export default function VerificationForm({
   saving?: boolean;
 }) {
   const [order, setOrder] = useState<EditableOrder>(() => toEditable(extraction));
-  const customerName = order.customer_suggested || order.customer_written;
-  const alternates = (extraction.customer_matches ?? []).filter((m) => m.name !== customerName);
+  const [customerMode, setCustomerMode] = useState<"select" | "manual">(
+    order.customer_suggested ? "select" : order.customer_written ? "select" : "manual"
+  );
+  const [customerError, setCustomerError] = useState<string | null>(null);
+
+  const likelyMatches = (extraction.customer_matches ?? []).filter((m) => m.score >= 0.3);
+  const likelyNames = new Set(likelyMatches.map((m) => m.name));
+  const otherCustomers = (extraction.customer_list ?? [])
+    .filter((name) => !likelyNames.has(name))
+    .sort((a, b) => a.localeCompare(b));
 
   function updateField<K extends keyof EditableOrder>(field: K, value: EditableOrder[K]) {
     setOrder((prev) => ({ ...prev, [field]: value }));
@@ -100,34 +111,112 @@ export default function VerificationForm({
     setOrder((prev) => ({ ...prev, items: [...prev.items, emptyItem()] }));
   }
 
+  function handleCustomerSelectChange(value: string) {
+    if (value === MANUAL_CUSTOMER) {
+      setCustomerMode("manual");
+      updateField("customer_suggested", "");
+    } else {
+      updateField("customer_suggested", value);
+    }
+    setCustomerError(null);
+  }
+
+  function handleConfirmClick() {
+    if (!order.customer_suggested.trim()) {
+      setCustomerError("Select or enter a customer before saving.");
+      return;
+    }
+    setCustomerError(null);
+    onConfirm(order);
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {extraction.uncertain_fields.length > 0 && (
+        <div
+          style={{
+            background: "#fff8e1",
+            border: "1px solid #e0b400",
+            borderRadius: 8,
+            padding: "10px 12px",
+            fontSize: 12,
+            color: "#6b5200",
+          }}
+        >
+          <strong>Double-check these before saving:</strong>
+          <ul style={{ margin: "4px 0 0 18px", padding: 0 }}>
+            {extraction.uncertain_fields.map((f) => (
+              <li key={f}>{f}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <Field label="Customer / Name" value={customerName} onChange={(v) => updateField("customer_suggested", v)} />
-          {order.customer_written && order.customer_written !== customerName && (
-            <span style={{ fontSize: 12, color: "#777" }}>Handwriting read as: &ldquo;{order.customer_written}&rdquo;</span>
-          )}
-          {alternates.length > 0 && (
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {alternates.map((match) => (
-                <button
-                  key={match.name}
-                  onClick={() => updateField("customer_suggested", match.name)}
-                  style={chipButtonStyle}
-                >
-                  {match.name}
-                </button>
-              ))}
+          <span style={fieldLabelStyle}>Customer / Name</span>
+
+          {customerMode === "select" ? (
+            <select
+              value={order.customer_suggested}
+              onChange={(e) => handleCustomerSelectChange(e.target.value)}
+              style={selectStyle}
+            >
+              <option value="" disabled>
+                — Select customer —
+              </option>
+              {likelyMatches.length > 0 && (
+                <optgroup label="Likely matches">
+                  {likelyMatches.map((m) => (
+                    <option key={m.name} value={m.name}>
+                      {m.name} ({Math.round(m.score * 100)}%)
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              <optgroup label="All customers">
+                {otherCustomers.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </optgroup>
+              <option value={MANUAL_CUSTOMER}>Other / new customer…</option>
+            </select>
+          ) : (
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                value={order.customer_suggested}
+                onChange={(e) => {
+                  updateField("customer_suggested", e.target.value);
+                  setCustomerError(null);
+                }}
+                placeholder="Type customer name"
+                style={inputStyle}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomerMode("select");
+                  updateField("customer_suggested", "");
+                }}
+                style={secondaryButtonStyle}
+              >
+                Back to list
+              </button>
             </div>
           )}
+
+          {order.customer_written && order.customer_written !== order.customer_suggested && (
+            <span style={{ fontSize: 12, color: "#777" }}>Handwriting read as: &ldquo;{order.customer_written}&rdquo;</span>
+          )}
+          {customerError && <span style={{ fontSize: 12, color: "#b00020" }}>{customerError}</span>}
         </div>
+
         <Field label="Order Slip Date" value={order.order_slip_date} onChange={(v) => updateField("order_slip_date", v)} />
         <Field label="Order Slip Number" value={order.order_slip_number} onChange={(v) => updateField("order_slip_number", v)} />
-        <Field label="AR Number" value={order.ar_number} onChange={(v) => updateField("ar_number", v)} />
-        <Field label="Terms" value={order.terms} onChange={(v) => updateField("terms", v)} />
+        <SelectField label="Terms" value={order.terms} options={TERMS_OPTIONS} onChange={(v) => updateField("terms", v)} />
         <Field label="Memo" value={order.memo} onChange={(v) => updateField("memo", v)} />
-        <Field label="Class" value={order.class} onChange={(v) => updateField("class", v)} />
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -157,7 +246,15 @@ export default function VerificationForm({
               <Field label="Rate" value={item.rate} onChange={(v) => updateItem(item.id, "rate", v)} />
               <Field label="Amount" value={item.amount} onChange={(v) => updateItem(item.id, "amount", v)} />
             </div>
-            <Field label="Invoice Class" value={item.invoice_class} onChange={(v) => updateItem(item.id, "invoice_class", v)} />
+            <div style={{ display: "flex", gap: 8 }}>
+              <SelectField
+                label="Class"
+                value={item.class}
+                options={CLASS_OPTIONS}
+                onChange={(v) => updateItem(item.id, "class", v)}
+              />
+              <Field label="Invoice Class" value={item.invoice_class} onChange={(v) => updateItem(item.id, "invoice_class", v)} />
+            </div>
           </div>
         ))}
         <button onClick={addItem} style={secondaryButtonStyle}>
@@ -169,7 +266,7 @@ export default function VerificationForm({
         <button onClick={onRetake} disabled={saving} style={secondaryButtonStyle}>
           Retake Photo
         </button>
-        <button onClick={() => onConfirm(order)} disabled={saving} style={{ ...primaryButtonStyle, flex: 1 }}>
+        <button onClick={handleConfirmClick} disabled={saving} style={{ ...primaryButtonStyle, flex: 1 }}>
           {saving ? "Saving…" : "Confirm & Save"}
         </button>
       </div>
@@ -189,19 +286,57 @@ function Field({
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, fontSize: 13, color: "#333" }}>
       {label}
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={{
-          padding: "10px 12px",
-          fontSize: 15,
-          borderRadius: 6,
-          border: "1px solid #ccc",
-        }}
-      />
+      <input value={value} onChange={(e) => onChange(e.target.value)} style={inputStyle} />
     </label>
   );
 }
+
+function SelectField({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, fontSize: 13, color: "#333" }}>
+      {label}
+      <select value={value} onChange={(e) => onChange(e.target.value)} style={selectStyle}>
+        <option value="">—</option>
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+const fieldLabelStyle: React.CSSProperties = {
+  fontSize: 13,
+  color: "#333",
+};
+
+const inputStyle: React.CSSProperties = {
+  padding: "10px 12px",
+  fontSize: 15,
+  borderRadius: 6,
+  border: "1px solid #ccc",
+  flex: 1,
+};
+
+const selectStyle: React.CSSProperties = {
+  padding: "10px 12px",
+  fontSize: 15,
+  borderRadius: 6,
+  border: "1px solid #ccc",
+  background: "#fff",
+};
 
 const primaryButtonStyle: React.CSSProperties = {
   padding: "14px 20px",
@@ -219,16 +354,6 @@ const secondaryButtonStyle: React.CSSProperties = {
   borderRadius: 8,
   border: "1px solid #999",
   background: "#fff",
-  color: "#333",
-  cursor: "pointer",
-};
-
-const chipButtonStyle: React.CSSProperties = {
-  padding: "4px 10px",
-  fontSize: 12,
-  borderRadius: 999,
-  border: "1px solid #999",
-  background: "#f4f4f4",
   color: "#333",
   cursor: "pointer",
 };
