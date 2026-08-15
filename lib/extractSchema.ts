@@ -26,7 +26,7 @@ export const ORDER_SLIP_SCHEMA = {
     customer_written: { type: "string", description: "Customer/member name exactly as handwritten. Empty string if unreadable." },
     waitress_written: {
       type: "string",
-      description: "The waiter/waitress name, if written on the slip -- often a second handwritten line near the customer name. Never part of customer_written. Empty string if absent/illegible.",
+      description: "The name written on the slip's own separate 'Waitress:' line -- often left blank in practice. Never part of customer_written. Empty string if blank/illegible.",
     },
     slip_type: {
       type: "string",
