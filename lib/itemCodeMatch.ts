@@ -48,10 +48,22 @@ export async function loadItemCodeTemplate(): Promise<ItemCodeEntry[]> {
 export function matchItemCodeCandidates(written: string, entries: ItemCodeEntry[], topN = 5): ItemCodeMatch[] {
   if (!written.trim() || entries.length === 0) return [];
 
-  return entries
+  const seenCodes = new Set<string>();
+  const deduped: ItemCodeMatch[] = [];
+  // The Inventory tab has genuine duplicate rows (the same item code listed
+  // more than once -- see loadItemCodeTemplate's comment on inconsistent
+  // "CATEGORY:" prefixing). Sorting first means the highest-scoring copy of
+  // a duplicated code wins; dedup avoids showing the same suggestion chip
+  // twice (and the React key collision that comes with it).
+  for (const match of entries
     .map((entry) => ({ entry, score: scoreAgainst(written, entry.salesDesc) }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, topN);
+    .sort((a, b) => b.score - a.score)) {
+    if (seenCodes.has(match.entry.itemCode)) continue;
+    seenCodes.add(match.entry.itemCode);
+    deduped.push(match);
+    if (deduped.length >= topN) break;
+  }
+  return deduped;
 }
 
 export function matchItemCode(written: string, entries: ItemCodeEntry[]): ItemCodeMatch | null {
