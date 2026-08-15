@@ -30,10 +30,10 @@ Rules — follow these exactly:
 - If a "Non-Member" checkbox/marking is ticked, still do your best to read and extract whatever name is actually written on the slip, even if it's messy or only partly legible — a non-member marking does not mean the name should be ignored. Only if the slip is marked Non-Member AND genuinely has no legible name at all, set "customer_written" to exactly "DIRECT SALES- WALK IN" (the club's account for walk-in/non-member sales) as a fallback.
 - The customer/member name is usually followed by a second handwritten line naming the waiter/waitress who took the order — that second line is NOT part of the customer's name. Put it in "waitress_written" instead, and keep "customer_written" to just the customer's own name.
 - "terms" must be exactly "COD" or "CREDIT" (or an empty string if you can't tell): look for an explicit written word ("COD", "Credit", "Charge"), a checked/circled box, or another clear marking distinguishing a member charge account (CREDIT) from a cash-paid order (COD).
-- On these slips, Amount = Rate × QTY for each line. If exactly one of "rate" or "amount" is illegible or missing but the other one and "qty" are both clearly legible, you may compute the missing value from that relationship instead of leaving it blank. Do not do this if two or more of the three values are unclear — leave those blank rather than guessing.
+- The single number written after an item's description is its line total ("amount") — these slips don't have a separate per-unit rate column, so don't try to read one; the app computes it from amount ÷ qty.
 - For each item line, set "confidence" between 0 and 1 for how sure you are of that line's reading.
 - Set "overall_confidence" between 0 and 1 for the whole extraction.
-- List the names of any fields you are unsure about in "uncertain_fields" (e.g. "order_slip_date", "items[1].rate").
+- List the names of any fields you are unsure about in "uncertain_fields" (e.g. "order_slip_date", "items[1].amount").
 
 Return your extraction as structured JSON matching the provided schema.`;
 
@@ -48,9 +48,19 @@ function parseDataUrl(dataUrl: string): { mediaType: string; data: string } {
 interface RawVisionItem {
   qty?: string;
   description?: string;
-  rate?: string;
   amount?: string;
   confidence?: number;
+}
+
+// Rate is never read off a slip (see the system prompt) -- always derived
+// from amount / qty, same formula and formatting as the live recalculation
+// in components/VerificationForm.tsx's updateItem.
+function deriveRate(amount: string, qty: string): string {
+  const amountNum = parseFloat(amount.replace(/[^0-9.-]/g, ""));
+  const qtyNum = parseFloat(qty.replace(/[^0-9.-]/g, ""));
+  if (!Number.isFinite(amountNum) || !Number.isFinite(qtyNum) || qtyNum === 0) return "";
+  const rate = amountNum / qtyNum;
+  return Number.isInteger(rate) ? String(rate) : rate.toFixed(2);
 }
 
 interface RawVisionExtraction {
@@ -150,13 +160,16 @@ export async function POST(req: Request) {
       // confirmed against the real sheet data, where they're always equal.
       const itemClass = slipType || guessClass(description, codeMatch?.entry.category);
 
+      const qty = item.qty ?? "";
+      const amount = item.amount ?? "";
+
       return {
-        qty: item.qty ?? "",
+        qty,
         invoice_class: itemClass,
         item: codeMatch ? codeMatch.entry.itemCode : "",
         description,
-        rate: item.rate ?? "",
-        amount: item.amount ?? "",
+        rate: deriveRate(amount, qty),
+        amount,
         confidence: item.confidence ?? 0,
         class: itemClass,
         candidates: candidates.map((c) => ({

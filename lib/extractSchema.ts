@@ -1,6 +1,10 @@
 // Schema sent to the vision model. Fields the app computes itself
-// (customer_suggested, item codes, per-item class, AR number) are NOT
-// part of this — the model only returns what it can actually read.
+// (customer_suggested, item codes, per-item class, AR number, rate) are NOT
+// part of this — the model only returns what it can actually read. Rate is
+// not on this list: chits only ever have one number written after an item's
+// description, and that's the line total (Amount), not a per-unit price —
+// Rate is always derived as Amount / QTY (see app/api/extract/route.ts and
+// components/VerificationForm.tsx), never read off the slip.
 export const ORDER_SLIP_ITEM_SCHEMA = {
   type: "object",
   properties: {
@@ -9,11 +13,10 @@ export const ORDER_SLIP_ITEM_SCHEMA = {
       type: "string",
       description: "The item/food/drink name exactly as handwritten, e.g. 'SMA', 'Heineken Green Can', 'Club Sandwich'. This identifies what was ordered.",
     },
-    rate: { type: "string", description: "Unit price as written. Empty string if illegible or absent." },
-    amount: { type: "string", description: "Line total as written. Empty string if illegible or absent." },
+    amount: { type: "string", description: "The line total written after the item description. Empty string if illegible or absent." },
     confidence: { type: "number", description: "0 to 1: how confident the reading of this line is." },
   },
-  required: ["qty", "description", "rate", "amount", "confidence"],
+  required: ["qty", "description", "amount", "confidence"],
   additionalProperties: false,
 };
 
@@ -43,7 +46,7 @@ export const ORDER_SLIP_SCHEMA = {
     memo: { type: "string", description: "Any memo/note text on the slip. Empty string if absent." },
     items: { type: "array", items: ORDER_SLIP_ITEM_SCHEMA, description: "One entry per line item. Repeated identical items are separate lines unless clearly written as one combined quantity." },
     overall_confidence: { type: "number", description: "0 to 1: overall confidence in this extraction." },
-    uncertain_fields: { type: "array", items: { type: "string" }, description: "Names of fields you are not confident about, e.g. 'order_slip_date', 'items[1].rate'." },
+    uncertain_fields: { type: "array", items: { type: "string" }, description: "Names of fields you are not confident about, e.g. 'order_slip_date', 'items[1].amount'." },
   },
   required: [
     "customer_written",
@@ -65,7 +68,7 @@ export interface OrderSlipItem {
   invoice_class: string;
   item: string; // looked-up item code — filled in server-side, empty if unmatched
   description: string;
-  rate: string;
+  rate: string; // derived server-side as amount / qty, never read off the slip
   amount: string;
   confidence: number;
   class: string; // "Restaurant" | "Bar" | "" — derived server-side per item
