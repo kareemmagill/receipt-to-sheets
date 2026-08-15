@@ -159,6 +159,7 @@ export default function VerificationForm({
   }
 
   function deleteItem(id: string) {
+    if (!confirm("Sure to remove item?")) return;
     setOrder((prev) => ({ ...prev, items: prev.items.filter((item) => item.id !== id) }));
   }
 
