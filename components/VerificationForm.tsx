@@ -94,6 +94,7 @@ export default function VerificationForm({
   extraction,
   itemTemplate,
   initialOrder,
+  photoDataUrl,
   onConfirm,
   onRetake,
   onRetakeLabel = "Retake Photo",
@@ -109,6 +110,10 @@ export default function VerificationForm({
   // extraction is still used for its customer_matches/customer_list and
   // uncertain_fields highlighting either way.
   initialOrder?: EditableOrder;
+  // The full-resolution original photo, still held in memory client-side --
+  // lets "View Full Photo" show it without a round-trip to Drive. Optional
+  // so nothing breaks if a caller has no photo on hand.
+  photoDataUrl?: string;
   onConfirm: (order: EditableOrder) => void;
   onRetake: () => void;
   onRetakeLabel?: string;
@@ -116,6 +121,7 @@ export default function VerificationForm({
   saving?: boolean;
 }) {
   const [order, setOrder] = useState<EditableOrder>(() => initialOrder ?? toEditable(extraction));
+  const [showPhoto, setShowPhoto] = useState(false);
   // The dropdown lists either real members or past walk-in names depending
   // on member_status (see app/api/extract/route.ts) -- same select/manual
   // UI either way.
@@ -231,6 +237,35 @@ export default function VerificationForm({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {photoDataUrl && (
+        <button type="button" onClick={() => setShowPhoto(true)} style={secondaryButtonStyle}>
+          View Full Photo
+        </button>
+      )}
+
+      {showPhoto && photoDataUrl && (
+        <div
+          onClick={() => setShowPhoto(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.92)",
+            zIndex: 1000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={photoDataUrl}
+            alt="Full order slip"
+            style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
+          />
+        </div>
+      )}
+
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <ToggleField
           label="Slip Type"

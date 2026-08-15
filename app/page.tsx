@@ -304,6 +304,7 @@ export default function Home() {
             extraction={extraction}
             itemTemplate={itemTemplate}
             initialOrder={editingArNumber ? (savedOrder ?? undefined) : undefined}
+            photoDataUrl={imageDataUrl ?? undefined}
             onConfirm={(order) => handleConfirm(order)}
             onRetake={editingArNumber ? handleCancelEdit : handleRetake}
             onRetakeLabel={editingArNumber ? "Cancel" : "Retake Photo"}
