@@ -216,39 +216,49 @@ export async function POST(req: Request) {
 
     // Always fetch the customer list (the verification screen needs it for
     // its dropdown even when the handwriting couldn't be read at all).
-    // Non-members aren't in the Customers tab by definition -- matching
-    // their handwritten name against it would just suggest an unrelated
-    // member who happens to sound similar. Match against past walk-in
-    // names instead (self-correcting: fixing a misread walk-in name once
-    // makes it a known name next time -- see lib/knownNames.ts).
+    // Fetches both real members and past walk-in names unconditionally,
+    // regardless of member_status -- previously only one side was ever
+    // fetched, so member names could keep showing after correcting
+    // Member -> Non-Member on the verification screen (real bug, found
+    // 2026-08-15). Non-members are never matched against the Customers
+    // tab (never suggest a real member as a walk-in); walk-in matching is
+    // self-correcting -- fixing a misread walk-in name once makes it a
+    // known name next time (see lib/knownNames.ts).
     try {
-      if (memberStatus === "Non-Member") {
-        const names = await loadKnownWalkInNames();
-        extraction.customer_list = names;
-        if (extraction.customer_written) {
-          const matches = matchCustomer(extraction.customer_written, names);
-          extraction.customer_matches = matches;
-          extraction.customer_suggested =
-            matches[0] && matches[0].score >= CUSTOMER_MATCH_THRESHOLD
-              ? matches[0].name
-              : extraction.customer_written;
-        }
-      } else {
-        const customerRows = await readTab("Customers");
-        const names = customerRows.map((row) => row[0]).filter((name): name is string => Boolean(name?.trim()));
-        extraction.customer_list = names;
-        if (extraction.customer_written) {
-          const matches = matchCustomer(extraction.customer_written, names);
-          extraction.customer_matches = matches;
-          extraction.customer_suggested =
-            matches[0] && matches[0].score >= CUSTOMER_MATCH_THRESHOLD ? matches[0].name : "";
-        }
+      const customerRows = await readTab("Customers");
+      extraction.customer_list = customerRows
+        .map((row) => row[0])
+        .filter((name): name is string => Boolean(name?.trim()));
+      if (extraction.customer_written) {
+        extraction.customer_matches = matchCustomer(extraction.customer_written, extraction.customer_list);
       }
     } catch {
       // Customer lookup failing shouldn't block the extraction — the user
       // can still type the name manually on the verification screen.
       extraction.customer_matches = [];
       extraction.customer_list = [];
+    }
+
+    try {
+      extraction.walkin_list = await loadKnownWalkInNames();
+      if (extraction.customer_written) {
+        extraction.walkin_matches = matchCustomer(extraction.customer_written, extraction.walkin_list);
+      }
+    } catch {
+      extraction.walkin_matches = [];
+      extraction.walkin_list = [];
+    }
+
+    // One-time pre-filled guess for the free-text field -- not re-derived
+    // if member_status is corrected afterward (the suggestion list the
+    // form shows does update live; see components/VerificationForm.tsx).
+    if (memberStatus === "Non-Member") {
+      const matches = extraction.walkin_matches ?? [];
+      extraction.customer_suggested =
+        matches[0] && matches[0].score >= CUSTOMER_MATCH_THRESHOLD ? matches[0].name : extraction.customer_written;
+    } else if (extraction.customer_written) {
+      const matches = extraction.customer_matches ?? [];
+      extraction.customer_suggested = matches[0] && matches[0].score >= CUSTOMER_MATCH_THRESHOLD ? matches[0].name : "";
     }
 
     // Same idea for the waitress name -- auto-correct to a known name when

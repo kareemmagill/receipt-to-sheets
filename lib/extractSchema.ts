@@ -97,14 +97,23 @@ export interface OrderSlipExtraction {
   overall_confidence: number;
   uncertain_fields: string[];
   // Filled in server-side — not part of what the vision model returns.
-  // For a Member customer_written, matched against the real Customers tab;
-  // for a Non-Member, matched against past walk-in names instead (see
-  // lib/knownNames.ts) -- same fields either way, only the source list
-  // differs, since the verification form's customer picker works the same
-  // way regardless of which one it's showing.
+  // Always both matched and sent, regardless of member_status, so the
+  // verification form can react live if member_status gets corrected after
+  // the fact instead of being stuck with whichever one was matched at
+  // extraction time (a real bug found 2026-08-15: member names could keep
+  // showing after correcting Member -> Non-Member, since only one side had
+  // ever been fetched). customer_matches/customer_list is real Members
+  // (the Customers tab); waitress_matches/waitress_list is unrelated to
+  // this pair, see below.
   customer_matches?: { name: string; score: number }[];
   customer_list?: string[];
-  // Same idea, for waitress_written against past waitress names.
+  // Past walk-in (Non-Member) names -- see lib/knownNames.ts. Never mixed
+  // with customer_matches/customer_list above; the verification form picks
+  // whichever pair matches the live member_status toggle.
+  walkin_matches?: { name: string; score: number }[];
+  walkin_list?: string[];
+  // Same self-correcting idea, for waitress_written against past waitress
+  // names -- see lib/knownNames.ts.
   waitress_matches?: { name: string; score: number }[];
   waitress_list?: string[];
 }

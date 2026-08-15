@@ -122,9 +122,11 @@ export default function VerificationForm({
 }) {
   const [order, setOrder] = useState<EditableOrder>(() => initialOrder ?? toEditable(extraction));
   const [showPhoto, setShowPhoto] = useState(false);
-  // The dropdown lists either real members or past walk-in names depending
-  // on member_status (see app/api/extract/route.ts) -- same select/manual
-  // UI either way.
+  // Only used for the Member branch of the Customer field (a select/manual
+  // toggle, same as before). Non-Member is always free text -- see the
+  // render below for why (a real bug, fixed 2026-08-15: it isn't a fixed
+  // roster like Members, so a dropdown-first UI blocked easy correction,
+  // and it must never show a real member's name as a "suggestion").
   const [customerMode, setCustomerMode] = useState<"select" | "manual">(
     order.customer_suggested ? "select" : order.customer_written ? "select" : "manual"
   );
@@ -141,6 +143,16 @@ export default function VerificationForm({
   const likelyNames = new Set(likelyMatches.map((m) => m.name));
   const otherCustomers = (extraction.customer_list ?? [])
     .filter((name) => !likelyNames.has(name))
+    .sort((a, b) => a.localeCompare(b));
+
+  // Walk-in suggestions -- always sourced from past walk-ins only, never
+  // the Customers/Members list, and read live off order.member_status so
+  // correcting the toggle after the fact immediately drops any stale
+  // member-sourced suggestions.
+  const likelyWalkIns = (extraction.walkin_matches ?? []).filter((m) => m.score >= 0.3);
+  const likelyWalkInNames = new Set(likelyWalkIns.map((m) => m.name));
+  const otherWalkIns = (extraction.walkin_list ?? [])
+    .filter((name) => !likelyWalkInNames.has(name))
     .sort((a, b) => a.localeCompare(b));
 
   // Kareem (2026-08-15): there are few enough waitresses that the whole
@@ -290,7 +302,22 @@ export default function VerificationForm({
             Customer / Name
           </span>
 
-          {customerMode === "select" ? (
+          {order.member_status === "Non-Member" ? (
+            // Always free text -- a walk-in isn't a fixed roster the way
+            // Members are, so gating behind a dropdown just blocks quick
+            // correction of a misread name. Past walk-in names (never real
+            // members) are offered as chips underneath instead of a
+            // required selection.
+            <input
+              value={order.customer_suggested}
+              onChange={(e) => {
+                updateField("customer_suggested", e.target.value);
+                setCustomerError(null);
+              }}
+              placeholder="Type walk-in guest's name"
+              style={inputStyle}
+            />
+          ) : customerMode === "select" ? (
             <select
               value={order.customer_suggested}
               onChange={(e) => handleCustomerSelectChange(e.target.value)}
@@ -338,6 +365,24 @@ export default function VerificationForm({
               >
                 Back to list
               </button>
+            </div>
+          )}
+
+          {order.member_status === "Non-Member" && (likelyWalkIns.length > 0 || otherWalkIns.length > 0) && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {[...likelyWalkIns.map((m) => m.name), ...otherWalkIns].slice(0, 8).map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => {
+                    updateField("customer_suggested", name);
+                    setCustomerError(null);
+                  }}
+                  style={chipButtonStyle}
+                >
+                  {name}
+                </button>
+              ))}
             </div>
           )}
 
