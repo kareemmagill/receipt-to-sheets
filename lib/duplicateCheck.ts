@@ -1,10 +1,29 @@
 import { readTab } from "./googleSheets";
 import type { EditableOrder } from "@/components/VerificationForm";
 
+export interface ExistingOrderItem {
+  qty: string;
+  description: string;
+  item: string;
+  amount: string;
+}
+
+export interface ExistingOrderSummary {
+  // Blank for legacy rows that predate this app's AR numbering -- callers
+  // must not offer an in-place "update" for those, since there's no
+  // reliable way to target them for replacement (see
+  // lib/deleteOrderByAr.ts, which matches by AR number).
+  arNumber: string;
+  customer: string;
+  date: string;
+  items: ExistingOrderItem[];
+}
+
 export interface DuplicateCheckResult {
   status: "none" | "exact" | "conflict";
   message?: string;
   differences?: string[];
+  existing?: ExistingOrderSummary;
 }
 
 // Sales Orders columns: Name(0), Class(1), Order Slip Date(2), Order Slip
@@ -14,6 +33,7 @@ const NAME_COL = 0;
 const DATE_COL = 2;
 const SLIP_NUM_COL = 3;
 const AR_COL = 4;
+const ITEM_COL = 10;
 const DESC_COL = 11;
 const QTY_COL = 8;
 const RATE_COL = 12;
@@ -32,6 +52,18 @@ export async function checkDuplicateSlip(order: EditableOrder): Promise<Duplicat
   const rows = await readTab("Sales Orders");
   const existingRows = rows.slice(1).filter((r) => (r[SLIP_NUM_COL] ?? "").trim() === slipNumber);
   if (existingRows.length === 0) return { status: "none" };
+
+  const existing: ExistingOrderSummary = {
+    arNumber: (existingRows[0][AR_COL] ?? "").trim(),
+    customer: (existingRows[0][NAME_COL] ?? "").trim(),
+    date: (existingRows[0][DATE_COL] ?? "").trim(),
+    items: existingRows.map((r) => ({
+      qty: (r[QTY_COL] ?? "").trim(),
+      description: (r[DESC_COL] ?? "").trim(),
+      item: (r[ITEM_COL] ?? "").trim(),
+      amount: (r[AMOUNT_COL] ?? "").trim(),
+    })),
+  };
 
   const differences: string[] = [];
 
@@ -69,10 +101,10 @@ export async function checkDuplicateSlip(order: EditableOrder): Promise<Duplicat
   }
 
   if (differences.length === 0) {
-    const arNumber = (existingRows[0][AR_COL] ?? "").trim();
     return {
       status: "exact",
-      message: `Slip #${slipNumber} is already recorded${arNumber ? ` (as ${arNumber})` : ""} — not re-entered.`,
+      message: `Slip #${slipNumber} is already recorded${existing.arNumber ? ` (as ${existing.arNumber})` : ""}.`,
+      existing,
     };
   }
 
@@ -80,5 +112,6 @@ export async function checkDuplicateSlip(order: EditableOrder): Promise<Duplicat
     status: "conflict",
     message: `Slip #${slipNumber} is already in the sheet, but with different data.`,
     differences,
+    existing,
   };
 }

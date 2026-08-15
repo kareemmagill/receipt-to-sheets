@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { OrderSlipExtraction } from "@/lib/extractSchema";
 import type { ItemCodeEntry } from "@/lib/itemCodeScoring";
+import type { ExistingOrderSummary } from "@/lib/duplicateCheck";
 import VerificationForm, { type EditableOrder } from "@/components/VerificationForm";
 import { loadLastPhoto, saveLastPhoto } from "@/lib/lastPhotoStore";
 import { resizeForVisionApi } from "@/lib/resizeImage";
@@ -18,12 +19,13 @@ export default function Home() {
   const [extraction, setExtraction] = useState<OrderSlipExtraction | null>(null);
   const [itemTemplate, setItemTemplate] = useState<ItemCodeEntry[]>([]);
 
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error" | "duplicate" | "conflict">(
-    "idle"
-  );
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [conflictDifferences, setConflictDifferences] = useState<string[]>([]);
   const [pendingOrder, setPendingOrder] = useState<EditableOrder | null>(null);
+  // Set when the scanned slip number already has a record -- non-null
+  // switches the UI to the "already exists" screen (see handleUpdateExisting)
+  // instead of the normal verification form.
+  const [existingOrder, setExistingOrder] = useState<ExistingOrderSummary | null>(null);
   const [savedOrder, setSavedOrder] = useState<EditableOrder | null>(null);
   const [savedArNumber, setSavedArNumber] = useState("");
   const [savedPhotoLink, setSavedPhotoLink] = useState<string | null>(null);
@@ -51,7 +53,7 @@ export default function Home() {
     setExtraction(null);
     setSaveStatus("idle");
     setSaveError(null);
-    setConflictDifferences([]);
+    setExistingOrder(null);
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -70,7 +72,7 @@ export default function Home() {
     setExtraction(null);
     setSaveStatus("idle");
     setSaveError(null);
-    setConflictDifferences([]);
+    setExistingOrder(null);
     setImageDataUrl(lastImageDataUrl);
   }
 
@@ -108,8 +110,8 @@ export default function Home() {
     setExtraction(null);
     setSaveStatus("idle");
     setSaveError(null);
-    setConflictDifferences([]);
     setPendingOrder(null);
+    setExistingOrder(null);
     setSavedOrder(null);
     setSavedPhotoLink(null);
     setPhotoWarning(null);
@@ -155,10 +157,15 @@ export default function Home() {
     }
   }
 
-  async function handleConfirm(order: EditableOrder, force = false) {
+  // replaceArNumberOverride is used by "Update Record" (see
+  // handleUpdateExisting) when the scanned slip number already exists but
+  // wasn't from this app's own post-save "Edit" flow (editingArNumber).
+  // Both mean the same thing to /api/save: replace that specific order.
+  async function handleConfirm(order: EditableOrder, replaceArNumberOverride?: string) {
+    const replaceArNumber = replaceArNumberOverride ?? editingArNumber ?? undefined;
+
     setSaveStatus("saving");
     setSaveError(null);
-    setConflictDifferences([]);
     setPendingOrder(order);
 
     try {
@@ -167,25 +174,19 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           order,
-          force,
           // Re-saving an already-archived photo would just duplicate it in
           // Drive for no benefit -- the physical chit hasn't changed, only
           // the extracted data has.
-          imageDataUrl: editingArNumber ? undefined : imageDataUrl,
-          replaceArNumber: editingArNumber ?? undefined,
+          imageDataUrl: replaceArNumber ? undefined : imageDataUrl,
+          replaceArNumber,
         }),
       });
       const data = await res.json();
 
-      if (data.duplicate) {
-        setSaveError(data.error ?? "Already recorded");
-        setSaveStatus("duplicate");
-        return;
-      }
-      if (data.conflict) {
-        setSaveError(data.error ?? "Slip number already exists with different data");
-        setConflictDifferences(data.differences ?? []);
-        setSaveStatus("conflict");
+      if (data.exists) {
+        setSaveError(data.error ?? "This slip number is already recorded.");
+        setExistingOrder(data.existing ?? null);
+        setSaveStatus("error");
         return;
       }
       if (!data.ok) {
@@ -196,15 +197,21 @@ export default function Home() {
 
       setSavedOrder(order);
       setSavedArNumber(data.arNumber);
-      setSavedPhotoLink(data.photoLink ?? (editingArNumber ? savedPhotoLink : null));
+      setSavedPhotoLink(data.photoLink ?? (replaceArNumber ? savedPhotoLink : null));
       setPhotoWarning(data.photoWarning ?? data.replaceWarning ?? null);
       setEditingArNumber(null);
+      setExistingOrder(null);
       setDeleteStatus("idle");
       setSaveStatus("success");
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err));
       setSaveStatus("error");
     }
+  }
+
+  function handleUpdateExisting() {
+    if (!pendingOrder || !existingOrder?.arNumber) return;
+    handleConfirm(pendingOrder, existingOrder.arNumber);
   }
 
   return (
@@ -290,40 +297,9 @@ export default function Home() {
         </>
       )}
 
-      {extraction && saveStatus !== "success" && saveStatus !== "duplicate" && (
+      {extraction && !existingOrder && saveStatus !== "success" && (
         <>
           {saveStatus === "error" && <p style={{ color: "#b00020" }}>Save failed: {saveError}</p>}
-          {saveStatus === "conflict" && (
-            <div
-              style={{
-                background: "#fdecea",
-                border: "1px solid #d32f2f",
-                borderRadius: 8,
-                padding: "10px 12px",
-                fontSize: 12,
-                color: "#7a1f1f",
-                display: "flex",
-                flexDirection: "column",
-                gap: 8,
-              }}
-            >
-              <strong>{saveError}</strong>
-              {conflictDifferences.length > 0 && (
-                <ul style={{ margin: 0, padding: "0 0 0 18px" }}>
-                  {conflictDifferences.map((d) => (
-                    <li key={d}>{d}</li>
-                  ))}
-                </ul>
-              )}
-              <span>Fix the fields below to match, or save anyway if this is genuinely a different order.</span>
-              <button
-                onClick={() => pendingOrder && handleConfirm(pendingOrder, true)}
-                style={{ ...buttonStyle, background: "#d32f2f", alignSelf: "flex-start" }}
-              >
-                Save Anyway
-              </button>
-            </div>
-          )}
           <VerificationForm
             extraction={extraction}
             itemTemplate={itemTemplate}
@@ -337,12 +313,24 @@ export default function Home() {
         </>
       )}
 
-      {saveStatus === "duplicate" && (
+      {existingOrder && saveStatus !== "success" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <p style={{ color: "#555" }}>{saveError}</p>
-          <button onClick={handleRetake} style={buttonStyle}>
-            Scan Another Slip
-          </button>
+          <p style={{ color: "#8a6d00" }}>{saveError}</p>
+          <ExistingOrderRecap order={existingOrder} />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {existingOrder.arNumber && (
+              <button
+                onClick={handleUpdateExisting}
+                disabled={saveStatus === "saving"}
+                style={{ ...buttonStyle, flex: 1 }}
+              >
+                {saveStatus === "saving" ? "Updating…" : "Update Record"}
+              </button>
+            )}
+            <button onClick={handleRetake} disabled={saveStatus === "saving"} style={secondaryButtonStyle}>
+              Back to Front Page
+            </button>
+          </div>
         </div>
       )}
 
@@ -449,6 +437,43 @@ function OrderSummary({ order }: { order: EditableOrder }) {
       </div>
 
       <SummaryRow label="Payment" value={paymentLabel} />
+    </div>
+  );
+}
+
+function ExistingOrderRecap({ order }: { order: ExistingOrderSummary }) {
+  const total = order.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+
+  return (
+    <div
+      style={{
+        border: "1px solid #ccc",
+        borderRadius: 8,
+        padding: 14,
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+        fontSize: 14,
+      }}
+    >
+      <SummaryRow label="Customer" value={order.customer || "—"} />
+      <SummaryRow label="Date" value={order.date || "—"} />
+
+      <div style={{ borderTop: "1px solid #eee", marginTop: 4, paddingTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+        {order.items.map((item, i) => (
+          <div key={i} style={{ display: "flex", gap: 8, fontSize: 13 }}>
+            <span style={{ width: 24, flexShrink: 0, color: "#777" }}>{item.qty}x</span>
+            <span style={{ flex: 1 }}>{item.description}</span>
+            <span style={{ width: 60, flexShrink: 0, color: "#777" }}>{item.item}</span>
+            <span style={{ width: 60, flexShrink: 0, textAlign: "right" }}>{item.amount}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ borderTop: "1px solid #eee", paddingTop: 8, display: "flex", justifyContent: "space-between", fontWeight: 600 }}>
+        <span>Total</span>
+        <span>{formatMoney(total)}</span>
+      </div>
     </div>
   );
 }

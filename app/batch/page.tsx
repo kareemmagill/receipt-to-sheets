@@ -101,12 +101,15 @@ export default function BatchImportPage() {
           body: JSON.stringify({ order, imageDataUrl: photo.dataUrl }),
         });
         const saveData = await saveRes.json();
-        if (saveData.duplicate) {
-          setResult(photo.id, "done", saveData.error ?? "Already recorded — skipped");
-          continue;
-        }
-        if (saveData.conflict) {
-          setResult(photo.id, "error", `${saveData.error} — needs manual review, skipped`);
+        if (saveData.exists) {
+          // No review screen here to offer Update Record, so an exact
+          // re-scan is a harmless skip but a genuine conflict needs a
+          // human to look at it manually later.
+          if (saveData.wasExact) {
+            setResult(photo.id, "done", saveData.error ?? "Already recorded — skipped");
+          } else {
+            setResult(photo.id, "error", `${saveData.error} — needs manual review, skipped`);
+          }
           continue;
         }
         if (!saveData.ok) {

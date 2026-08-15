@@ -30,13 +30,13 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const order: EditableOrder | undefined = body?.order;
-    const force: boolean = body?.force === true;
     const imageDataUrl: string | undefined = body?.imageDataUrl;
-    // Set when re-saving an edit of an order this app already saved (the
-    // post-save summary screen's "Edit" option) -- the old rows are deleted
-    // after the edited version saves successfully (see below). Implies
-    // force: this is a known, intentional replacement of a specific order,
-    // not an accidental re-scan duplicateCheck should be second-guessing.
+    // Set for two flows that both mean "replace this specific existing
+    // order, not append a new one": the post-save summary screen's "Edit"
+    // option, and "Update Record" when the scanned slip number already
+    // exists (see below). Skips duplicateCheck -- this is a known,
+    // intentional replacement, not an accidental re-scan to second-guess.
+    // The old rows are deleted only after the new ones save successfully.
     const replaceArNumber: string | undefined = body?.replaceArNumber;
 
     if (!order) {
@@ -49,17 +49,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Missing customer" }, { status: 400 });
     }
 
-    if (!force && !replaceArNumber) {
+    if (!replaceArNumber) {
       const duplicate = await checkDuplicateSlip(order);
-      if (duplicate.status === "exact") {
+      if (duplicate.status === "exact" || duplicate.status === "conflict") {
         return NextResponse.json(
-          { ok: false, duplicate: true, error: duplicate.message },
-          { status: 409 }
-        );
-      }
-      if (duplicate.status === "conflict") {
-        return NextResponse.json(
-          { ok: false, conflict: true, error: duplicate.message, differences: duplicate.differences },
+          {
+            ok: false,
+            exists: true,
+            wasExact: duplicate.status === "exact",
+            error: duplicate.message,
+            existing: duplicate.existing,
+          },
           { status: 409 }
         );
       }
