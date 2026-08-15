@@ -129,38 +129,46 @@ export default function ReportsPage() {
             />
           </div>
 
-          <section>
-            <h2 style={{ fontSize: 16, marginBottom: 8 }}>Sales by Menu Item, by Date</h2>
-            <div style={{ overflowX: "auto" }}>
-              <table style={tableStyle}>
-                <thead>
-                  <tr>
-                    <th style={thStyle}>Date</th>
-                    <th style={thStyle}>Item</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>Qty</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredItems.map((r) => (
-                    <tr key={`${r.dateKey}|${r.item}`}>
-                      <td style={tdStyle}>{formatShortDate(r.dateKey)}</td>
-                      <td style={tdStyle}>{r.item}</td>
-                      <td style={{ ...tdStyle, textAlign: "right" }}>{r.qty}</td>
-                      <td style={{ ...tdStyle, textAlign: "right" }}>{formatMoney(r.total)}</td>
-                    </tr>
-                  ))}
-                  {filteredItems.length === 0 && (
+          {/* The item table is search-by-item only -- with a customer name
+              matching, it would always show an empty "No data" table right
+              under a correct total, which reads as broken rather than as
+              working-as-designed. Hide it in that case instead. */}
+          {matchedCustomerNames.length > 0 ? (
+            <p style={{ fontSize: 13, color: "#777" }}>Clear the search to see item-by-item sales again.</p>
+          ) : (
+            <section>
+              <h2 style={{ fontSize: 16, marginBottom: 8 }}>Sales by Menu Item, by Date</h2>
+              <div style={{ overflowX: "auto" }}>
+                <table style={tableStyle}>
+                  <thead>
                     <tr>
-                      <td style={tdStyle} colSpan={4}>
-                        No data.
-                      </td>
+                      <th style={thStyle}>Date</th>
+                      <th style={thStyle}>Item</th>
+                      <th style={{ ...thStyle, textAlign: "right" }}>Qty</th>
+                      <th style={{ ...thStyle, textAlign: "right" }}>Total</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
+                  </thead>
+                  <tbody>
+                    {filteredItems.map((r) => (
+                      <tr key={`${r.dateKey}|${r.item}`}>
+                        <td style={tdStyle}>{formatShortDate(r.dateKey)}</td>
+                        <td style={tdStyle}>{r.item}</td>
+                        <td style={{ ...tdStyle, textAlign: "right" }}>{r.qty}</td>
+                        <td style={{ ...tdStyle, textAlign: "right" }}>{formatMoney(r.total)}</td>
+                      </tr>
+                    ))}
+                    {filteredItems.length === 0 && (
+                      <tr>
+                        <td style={tdStyle} colSpan={4}>
+                          No data.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
         </>
       )}
     </main>
