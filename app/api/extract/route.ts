@@ -4,6 +4,7 @@ import { ORDER_SLIP_SCHEMA, type OrderSlipExtraction, type OrderSlipItem } from 
 import { readTab } from "@/lib/googleSheets";
 import { matchCustomer } from "@/lib/customerMatch";
 import { loadKnownWaitressNames, loadKnownWalkInNames } from "@/lib/knownNames";
+import { loadItemCorrections } from "@/lib/itemCorrections";
 import {
   loadItemCodeTemplate,
   matchItemCodeCandidates,
@@ -140,12 +141,15 @@ export async function POST(req: Request) {
       uncertainFields.push("slip_type (couldn't tell Bar vs Restaurant from the heading — Class guessed per item)");
     }
 
-    // Look up an item code + Restaurant/Bar class for each line, using the
-    // live Item Code Template tab. A missing template read shouldn't block
+    // Look up an item code + Restaurant/Bar class for each line, matching
+    // against past corrections first (see lib/itemCorrections.ts -- an
+    // exact repeat of previously-corrected handwriting scores 1.0 there)
+    // and the live Item Code Template tab. A missing read shouldn't block
     // the whole extraction — items just come back uncoded for manual entry.
     let itemTemplate: Awaited<ReturnType<typeof loadItemCodeTemplate>> = [];
     try {
-      itemTemplate = await loadItemCodeTemplate();
+      const [corrections, template] = await Promise.all([loadItemCorrections(), loadItemCodeTemplate()]);
+      itemTemplate = [...corrections, ...template];
     } catch {
       // fall through with an empty template
     }
@@ -153,12 +157,16 @@ export async function POST(req: Request) {
     const items: OrderSlipItem[] = (raw.items ?? []).map((item, index) => {
       const description = item.description ?? "";
       const candidates = matchItemCodeCandidates(description, itemTemplate, 5);
-      const codeMatch = candidates[0] && candidates[0].score >= 0.5 ? candidates[0] : null;
+      // Only a fully confident match gets auto-filled -- anything less is
+      // left blank (and flagged) rather than pre-filling a guess that
+      // might be wrong and go unnoticed. The candidate chips (see
+      // components/VerificationForm.tsx) are how the user picks or types
+      // the real one, and that correction becomes a known pairing itself
+      // the next time this same handwriting comes up.
+      const codeMatch = candidates[0] && candidates[0].score >= ITEM_MATCH_CONFIDENT_THRESHOLD ? candidates[0] : null;
 
       if (!codeMatch) {
-        uncertainFields.push(`items[${index}].item (no confident code match — check manually)`);
-      } else if (codeMatch.score < ITEM_MATCH_CONFIDENT_THRESHOLD) {
-        uncertainFields.push(`items[${index}].item (partial code match — please verify)`);
+        uncertainFields.push(`items[${index}].item (no confident code match — pick or enter manually)`);
       }
 
       // Invoice Class is always the same Restaurant/Bar value as Class —

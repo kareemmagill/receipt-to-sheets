@@ -182,7 +182,10 @@ export default function VerificationForm({
             itemCode: c.entry.itemCode,
             score: c.score,
           }));
-          updated.item = candidates[0] && candidates[0].score >= 0.5 ? candidates[0].entry.itemCode : "";
+          // Only a fully confident match auto-fills -- see the matching
+          // threshold comment in app/api/extract/route.ts.
+          updated.item =
+            candidates[0] && candidates[0].score >= ITEM_MATCH_CONFIDENT_THRESHOLD ? candidates[0].entry.itemCode : "";
         }
         return updated;
       }),
@@ -460,7 +463,11 @@ export default function VerificationForm({
                     label="Item Code"
                     value={item.item}
                     onChange={(v) => updateItem(item.id, "item", v)}
-                    uncertain={itemUncertain.has("item")}
+                    // Clears the moment there's any value, whether from a
+                    // candidate chip or typed directly -- unlike the other
+                    // fields, "uncertain" here means "still blank," not a
+                    // static flag from the original extraction.
+                    uncertain={itemUncertain.has("item") && !item.item}
                   />
                 </div>
                 <div style={{ width: 76 }}>
@@ -481,7 +488,7 @@ export default function VerificationForm({
                 </button>
               </div>
 
-              {(item.candidates?.[0]?.score ?? 0) < ITEM_MATCH_CONFIDENT_THRESHOLD &&
+              {!item.item &&
                 (item.candidates ?? [])
                   .filter((c) => c.score >= 0.3 && c.description !== item.description).length > 0 && (
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
