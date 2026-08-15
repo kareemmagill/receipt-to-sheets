@@ -9,6 +9,22 @@ import type { EditableOrder } from "@/components/VerificationForm";
 const PHOTO_LOG_TAB = "Photo Log";
 const PHOTO_LOG_HEADER = ["AR Number", "Order Slip Number", "Customer", "Saved At", "Photo Link"];
 
+// Named after the chit itself (its slip number + which physical form it is)
+// rather than the AR number, since AR numbers are usually blank/uninformative
+// (see lib/arNumber.ts) while the slip number is what's actually printed on
+// the paper and what Kareem would search Drive for. "Bar"/"Restaurant" is
+// per-item (an order can mix drinks and food), so this takes whichever class
+// the first item ended up with as the slip's physical form -- true for the
+// overwhelming majority of real chits, which are one form or the other, not
+// worth blocking on for a filename. Falls back to the AR number, then a
+// generic label, if the slip number was never read.
+function buildPhotoFileName(order: EditableOrder, arNumber: string): string {
+  const slipLabel = order.items[0]?.class === "Bar" ? "Bar" : order.items[0]?.class === "Restaurant" ? "Food" : "";
+  const slipNumber = order.order_slip_number?.trim().replace(/[/\\]/g, "-");
+  const base = slipNumber || arNumber || "slip";
+  return `${base}${slipLabel ? `_${slipLabel}` : ""}.jpg`;
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -55,7 +71,7 @@ export async function POST(req: Request) {
     if (imageDataUrl) {
       try {
         const customerName = order.customer_suggested || order.customer_written;
-        const fileName = `${arNumber}${order.order_slip_number ? `_slip${order.order_slip_number}` : ""}.jpg`;
+        const fileName = buildPhotoFileName(order, arNumber);
         const { webViewLink } = await uploadOrderPhoto({ imageDataUrl, fileName });
 
         await ensureTabExists(PHOTO_LOG_TAB, PHOTO_LOG_HEADER);
