@@ -230,7 +230,10 @@ export async function POST(req: Request) {
       extraction.customer_list = [];
     }
 
-    return NextResponse.json({ ok: true, extraction });
+    // Sent back alongside the extraction so the verification form can
+    // re-match item codes client-side as the description is retyped,
+    // without a network round-trip per keystroke or re-reading the sheet.
+    return NextResponse.json({ ok: true, extraction, itemTemplate });
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : String(err) },

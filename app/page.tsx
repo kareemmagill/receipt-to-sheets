@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { OrderSlipExtraction } from "@/lib/extractSchema";
+import type { ItemCodeEntry } from "@/lib/itemCodeScoring";
 import VerificationForm, { type EditableOrder } from "@/components/VerificationForm";
 import { loadLastPhoto, saveLastPhoto } from "@/lib/lastPhotoStore";
 import { resizeForVisionApi } from "@/lib/resizeImage";
@@ -14,6 +15,7 @@ export default function Home() {
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [extraction, setExtraction] = useState<OrderSlipExtraction | null>(null);
+  const [itemTemplate, setItemTemplate] = useState<ItemCodeEntry[]>([]);
 
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error" | "duplicate" | "conflict">(
     "idle"
@@ -87,6 +89,7 @@ export default function Home() {
       }
 
       setExtraction(data.extraction);
+      setItemTemplate(data.itemTemplate ?? []);
       setStatus("idle");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -248,6 +251,7 @@ export default function Home() {
           )}
           <VerificationForm
             extraction={extraction}
+            itemTemplate={itemTemplate}
             onConfirm={(order) => handleConfirm(order)}
             onRetake={handleRetake}
             saving={saveStatus === "saving"}

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { OrderSlipExtraction, OrderSlipItem } from "@/lib/extractSchema";
 import { makeId } from "@/lib/makeId";
+import { matchItemCodeCandidates, ITEM_MATCH_CONFIDENT_THRESHOLD, type ItemCodeEntry } from "@/lib/itemCodeScoring";
 
 export type EditableItem = OrderSlipItem & { id: string };
 export type EditableOrder = Omit<OrderSlipExtraction, "items" | "uncertain_fields" | "overall_confidence"> & {
@@ -90,11 +91,13 @@ function emptyItem(): EditableItem {
 
 export default function VerificationForm({
   extraction,
+  itemTemplate,
   onConfirm,
   onRetake,
   saving = false,
 }: {
   extraction: OrderSlipExtraction;
+  itemTemplate: ItemCodeEntry[];
   onConfirm: (order: EditableOrder) => void;
   onRetake: () => void;
   saving?: boolean;
@@ -143,6 +146,18 @@ export default function VerificationForm({
         // Invoice Class always mirrors Class.
         if (field === "class") {
           updated.invoice_class = value;
+        }
+        // Re-match item code candidates against the Inventory template as
+        // the description is retyped, same threshold/logic as the initial
+        // server-side match in app/api/extract/route.ts.
+        if (field === "description") {
+          const candidates = matchItemCodeCandidates(value, itemTemplate, 5);
+          updated.candidates = candidates.map((c) => ({
+            description: c.entry.salesDesc,
+            itemCode: c.entry.itemCode,
+            score: c.score,
+          }));
+          updated.item = candidates[0] && candidates[0].score >= 0.5 ? candidates[0].entry.itemCode : "";
         }
         return updated;
       }),
@@ -355,8 +370,9 @@ export default function VerificationForm({
                 </button>
               </div>
 
-              {(item.candidates ?? [])
-                .filter((c) => c.score >= 0.3 && c.description !== item.description).length > 0 && (
+              {(item.candidates?.[0]?.score ?? 0) < ITEM_MATCH_CONFIDENT_THRESHOLD &&
+                (item.candidates ?? [])
+                  .filter((c) => c.score >= 0.3 && c.description !== item.description).length > 0 && (
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {(item.candidates ?? [])
                     .filter((c) => c.score >= 0.3 && c.description !== item.description)
