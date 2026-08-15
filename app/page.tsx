@@ -10,6 +10,7 @@ import { resizeForVisionApi } from "@/lib/resizeImage";
 
 export default function Home() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const libraryInputRef = useRef<HTMLInputElement>(null);
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const [lastImageDataUrl, setLastImageDataUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
@@ -242,10 +243,26 @@ export default function Home() {
             onChange={handleFileChange}
             style={{ display: "none" }}
           />
+          {/* No `capture` attribute -- that's what forces straight to camera
+              on the input above. Omitting it lets the browser offer the
+              photo library instead. */}
+          <input
+            ref={libraryInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            style={{ display: "none" }}
+          />
 
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button onClick={() => inputRef.current?.click()} style={{ ...buttonStyle, flex: 1 }}>
               {imageDataUrl ? "Retake Photo" : "Take Photo"}
+            </button>
+            <button
+              onClick={() => libraryInputRef.current?.click()}
+              style={{ ...buttonStyle, flex: 1, background: "#fff", color: "#171717" }}
+            >
+              Use Photo
             </button>
             {!imageDataUrl && lastImageDataUrl && (
               <button onClick={handleUseLastPhoto} style={{ ...buttonStyle, flex: 1, background: "#fff", color: "#171717" }}>
