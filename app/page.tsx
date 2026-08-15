@@ -1,13 +1,15 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { OrderSlipExtraction } from "@/lib/extractSchema";
 import VerificationForm, { type EditableOrder } from "@/components/VerificationForm";
+import { loadLastPhoto, saveLastPhoto } from "@/lib/lastPhotoStore";
 
 export default function Home() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
+  const [lastImageDataUrl, setLastImageDataUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [extraction, setExtraction] = useState<OrderSlipExtraction | null>(null);
@@ -22,6 +24,14 @@ export default function Home() {
   const [savedArNumber, setSavedArNumber] = useState("");
   const [photoWarning, setPhotoWarning] = useState<string | null>(null);
 
+  useEffect(() => {
+    loadLastPhoto()
+      .then((dataUrl) => {
+        if (dataUrl) setLastImageDataUrl(dataUrl);
+      })
+      .catch(() => {});
+  }, []);
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -34,8 +44,24 @@ export default function Home() {
     setConflictDifferences([]);
 
     const reader = new FileReader();
-    reader.onload = () => setImageDataUrl(reader.result as string);
+    reader.onload = () => {
+      const result = reader.result as string;
+      setImageDataUrl(result);
+      setLastImageDataUrl(result);
+      saveLastPhoto(result).catch(() => {});
+    };
     reader.readAsDataURL(file);
+  }
+
+  function handleUseLastPhoto() {
+    if (!lastImageDataUrl) return;
+    setStatus("idle");
+    setError(null);
+    setExtraction(null);
+    setSaveStatus("idle");
+    setSaveError(null);
+    setConflictDifferences([]);
+    setImageDataUrl(lastImageDataUrl);
   }
 
   async function handleProcess() {
@@ -154,9 +180,16 @@ export default function Home() {
             style={{ display: "none" }}
           />
 
-          <button onClick={() => inputRef.current?.click()} style={buttonStyle}>
-            {imageDataUrl ? "Retake Photo" : "Take Photo"}
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => inputRef.current?.click()} style={{ ...buttonStyle, flex: 1 }}>
+              {imageDataUrl ? "Retake Photo" : "Take Photo"}
+            </button>
+            {!imageDataUrl && lastImageDataUrl && (
+              <button onClick={handleUseLastPhoto} style={{ ...buttonStyle, flex: 1, background: "#fff", color: "#171717" }}>
+                Use Last Photo
+              </button>
+            )}
+          </div>
 
           {imageDataUrl && (
             // eslint-disable-next-line @next/next/no-img-element
