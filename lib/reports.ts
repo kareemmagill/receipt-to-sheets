@@ -8,7 +8,8 @@ export interface CustomerMonthlyTotal {
 
 export interface ItemMonthlyTotal {
   item: string;
-  monthKey: string;
+  monthKey: string; // YYYY-MM -- still used for the month filter dropdown
+  dateKey: string; // YYYY-MM-DD (or "Unknown") -- one row per exact day, not aggregated across the month
   qty: number;
   total: number;
 }
@@ -27,7 +28,7 @@ function parseAmount(raw: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function parseOrderDate(raw: string): { year: number; month: number } | null {
+function parseOrderDate(raw: string): { year: number; month: number; day: number } | null {
   const match = raw.trim().match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
   if (!match) return null;
 
@@ -37,13 +38,19 @@ function parseOrderDate(raw: string): { year: number; month: number } | null {
   if (match[3].length === 2) year += year < 70 ? 2000 : 1900;
 
   if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-  return { year, month };
+  return { year, month, day };
 }
 
 function monthKeyFrom(raw: string): string {
   const parsed = parseOrderDate(raw ?? "");
   if (!parsed) return "Unknown";
   return `${parsed.year}-${String(parsed.month).padStart(2, "0")}`;
+}
+
+function dateKeyFrom(raw: string): string {
+  const parsed = parseOrderDate(raw ?? "");
+  if (!parsed) return "Unknown";
+  return `${parsed.year}-${String(parsed.month).padStart(2, "0")}-${String(parsed.day).padStart(2, "0")}`;
 }
 
 export async function computeSalesReports(): Promise<{
@@ -54,6 +61,8 @@ export async function computeSalesReports(): Promise<{
   const dataRows = rows.slice(1); // skip header
 
   const customerMap = new Map<string, number>();
+  // Item sales are tracked per exact day, not aggregated across the whole
+  // month -- the Menu Item report shows individual dates.
   const itemMap = new Map<string, { qty: number; total: number }>();
 
   for (const row of dataRows) {
@@ -63,14 +72,16 @@ export async function computeSalesReports(): Promise<{
     const qty = parseAmount(row[QTY_COL] ?? "");
     if (!name && !description) continue;
 
-    const monthKey = monthKeyFrom(row[DATE_COL] ?? "");
+    const rawDate = row[DATE_COL] ?? "";
+    const monthKey = monthKeyFrom(rawDate);
+    const dateKey = dateKeyFrom(rawDate);
 
     if (name) {
       const key = `${monthKey}||${name}`;
       customerMap.set(key, (customerMap.get(key) ?? 0) + amount);
     }
     if (description) {
-      const key = `${monthKey}||${description}`;
+      const key = `${dateKey}||${description}`;
       const existing = itemMap.get(key) ?? { qty: 0, total: 0 };
       itemMap.set(key, { qty: existing.qty + qty, total: existing.total + amount });
     }
@@ -85,10 +96,11 @@ export async function computeSalesReports(): Promise<{
 
   const itemMonthly = [...itemMap.entries()]
     .map(([key, v]) => {
-      const [monthKey, item] = key.split("||");
-      return { item, monthKey, qty: v.qty, total: v.total };
+      const [dateKey, item] = key.split("||");
+      const monthKey = dateKey === "Unknown" ? "Unknown" : dateKey.slice(0, 7);
+      return { item, monthKey, dateKey, qty: v.qty, total: v.total };
     })
-    .sort((a, b) => b.monthKey.localeCompare(a.monthKey) || b.total - a.total);
+    .sort((a, b) => b.dateKey.localeCompare(a.dateKey) || b.total - a.total);
 
   return { customerMonthly, itemMonthly };
 }

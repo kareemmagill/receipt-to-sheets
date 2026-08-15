@@ -10,6 +10,12 @@ function formatMonth(monthKey: string): string {
   return new Date(y, m - 1, 1).toLocaleString("en-US", { month: "long", year: "numeric" });
 }
 
+function formatShortDate(dateKey: string): string {
+  if (dateKey === "Unknown") return "Unknown date";
+  const [y, m, d] = dateKey.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-US", { weekday: "short", day: "2-digit" });
+}
+
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -104,12 +110,12 @@ export default function ReportsPage() {
           </div>
 
           <section>
-            <h2 style={{ fontSize: 16, marginBottom: 8 }}>Sales by Menu Item, by Month</h2>
+            <h2 style={{ fontSize: 16, marginBottom: 8 }}>Sales by Menu Item, by Date</h2>
             <div style={{ overflowX: "auto" }}>
               <table style={tableStyle}>
                 <thead>
                   <tr>
-                    <th style={thStyle}>Month</th>
+                    <th style={thStyle}>Date</th>
                     <th style={thStyle}>Item</th>
                     <th style={{ ...thStyle, textAlign: "right" }}>Qty</th>
                     <th style={{ ...thStyle, textAlign: "right" }}>Total</th>
@@ -117,8 +123,8 @@ export default function ReportsPage() {
                 </thead>
                 <tbody>
                   {filteredItems.map((r) => (
-                    <tr key={`${r.monthKey}|${r.item}`}>
-                      <td style={tdStyle}>{formatMonth(r.monthKey)}</td>
+                    <tr key={`${r.dateKey}|${r.item}`}>
+                      <td style={tdStyle}>{formatShortDate(r.dateKey)}</td>
                       <td style={tdStyle}>{r.item}</td>
                       <td style={{ ...tdStyle, textAlign: "right" }}>{r.qty}</td>
                       <td style={{ ...tdStyle, textAlign: "right" }}>{formatMoney(r.total)}</td>
