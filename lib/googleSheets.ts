@@ -84,6 +84,50 @@ export async function appendRows(tabName: string, rows: (string | number)[][]) {
   });
 }
 
+async function getSheetId(tabName: string): Promise<number> {
+  if (!SHEET_ID) throw new Error("Missing GOOGLE_SHEET_ID env var");
+
+  const realTitle = await resolveTabTitle(tabName);
+  const sheets = getSheetsClient();
+  const res = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+  const sheet = (res.data.sheets ?? []).find((s) => s.properties?.title === realTitle);
+
+  if (sheet?.properties?.sheetId == null) {
+    throw new Error(`Could not resolve sheetId for tab "${tabName}"`);
+  }
+  return sheet.properties.sheetId;
+}
+
+// startRow/endRow are 1-indexed sheet row numbers (matching what you'd see in
+// the Sheets UI), inclusive on both ends. Refuses row 1 so a bug here can
+// never eat the header row.
+export async function deleteDataRows(tabName: string, startRow: number, endRow: number) {
+  if (!SHEET_ID) throw new Error("Missing GOOGLE_SHEET_ID env var");
+  if (startRow < 2 || endRow < startRow) {
+    throw new Error(`Refusing to delete rows ${startRow}-${endRow} (must be startRow >= 2, endRow >= startRow)`);
+  }
+
+  const sheetId = await getSheetId(tabName);
+  const sheets = getSheetsClient();
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    requestBody: {
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: "ROWS",
+              startIndex: startRow - 1,
+              endIndex: endRow,
+            },
+          },
+        },
+      ],
+    },
+  });
+}
+
 // Creates a new tab with a header row if one matching this name doesn't
 // already exist. Used for auxiliary tabs the app manages itself (e.g. the
 // photo log) — never for the existing Sales Orders / Customers / etc. tabs,
