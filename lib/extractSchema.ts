@@ -97,6 +97,14 @@ export interface OrderSlipExtraction {
   overall_confidence: number;
   uncertain_fields: string[];
   // Filled in server-side — not part of what the vision model returns.
+  // For a Member customer_written, matched against the real Customers tab;
+  // for a Non-Member, matched against past walk-in names instead (see
+  // lib/knownNames.ts) -- same fields either way, only the source list
+  // differs, since the verification form's customer picker works the same
+  // way regardless of which one it's showing.
   customer_matches?: { name: string; score: number }[];
   customer_list?: string[];
+  // Same idea, for waitress_written against past waitress names.
+  waitress_matches?: { name: string; score: number }[];
+  waitress_list?: string[];
 }

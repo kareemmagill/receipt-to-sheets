@@ -11,6 +11,7 @@ export type EditableOrder = Omit<OrderSlipExtraction, "items" | "uncertain_field
 };
 
 const MANUAL_CUSTOMER = "__MANUAL__";
+const MANUAL_WAITRESS = "__MANUAL__";
 const CLASS_OPTIONS = ["Restaurant", "Bar"];
 const SLIP_TYPE_TOGGLE_OPTIONS = [
   { value: "Bar", display: "Order Slip (Bar)" },
@@ -115,18 +116,16 @@ export default function VerificationForm({
   saving?: boolean;
 }) {
   const [order, setOrder] = useState<EditableOrder>(() => initialOrder ?? toEditable(extraction));
-  // Non-members aren't on the member list, so their (pre-filled, OCR'd)
-  // name always starts as free text rather than a dropdown "selection".
+  // The dropdown lists either real members or past walk-in names depending
+  // on member_status (see app/api/extract/route.ts) -- same select/manual
+  // UI either way.
   const [customerMode, setCustomerMode] = useState<"select" | "manual">(
-    order.member_status === "Non-Member"
-      ? "manual"
-      : order.customer_suggested
-        ? "select"
-        : order.customer_written
-          ? "select"
-          : "manual"
+    order.customer_suggested ? "select" : order.customer_written ? "select" : "manual"
   );
   const [customerError, setCustomerError] = useState<string | null>(null);
+  const [waitressMode, setWaitressMode] = useState<"select" | "manual">(
+    order.waitress ? "select" : "manual"
+  );
 
   const uncertain = parseUncertainFields(extraction.uncertain_fields);
 
@@ -136,6 +135,14 @@ export default function VerificationForm({
   const likelyNames = new Set(likelyMatches.map((m) => m.name));
   const otherCustomers = (extraction.customer_list ?? [])
     .filter((name) => !likelyNames.has(name))
+    .sort((a, b) => a.localeCompare(b));
+
+  // Kareem (2026-08-15): there are few enough waitresses that the whole
+  // known list is worth showing, not just close matches.
+  const likelyWaitresses = (extraction.waitress_matches ?? []).filter((m) => m.score >= 0.3);
+  const likelyWaitressNames = new Set(likelyWaitresses.map((m) => m.name));
+  const otherWaitresses = (extraction.waitress_list ?? [])
+    .filter((name) => !likelyWaitressNames.has(name))
     .sort((a, b) => a.localeCompare(b));
 
   function updateField<K extends keyof EditableOrder>(field: K, value: EditableOrder[K]) {
@@ -202,6 +209,15 @@ export default function VerificationForm({
       updateField("customer_suggested", value);
     }
     setCustomerError(null);
+  }
+
+  function handleWaitressSelectChange(value: string) {
+    if (value === MANUAL_WAITRESS) {
+      setWaitressMode("manual");
+      updateField("waitress", "");
+    } else {
+      updateField("waitress", value);
+    }
   }
 
   function handleConfirmClick() {
@@ -301,12 +317,60 @@ export default function VerificationForm({
           uncertain={uncertain.top.has("member_status")}
         />
 
-        <Field
-          label="Waitress"
-          value={order.waitress}
-          onChange={(v) => updateField("waitress", v)}
-          uncertain={uncertain.top.has("waitress") || uncertain.top.has("waitress_written")}
-        />
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <span
+            style={{
+              ...fieldLabelStyle,
+              color: uncertain.top.has("waitress") || uncertain.top.has("waitress_written") ? "#b00020" : fieldLabelStyle.color,
+            }}
+          >
+            Waitress
+          </span>
+
+          {waitressMode === "select" ? (
+            <select value={order.waitress} onChange={(e) => handleWaitressSelectChange(e.target.value)} style={selectStyle}>
+              <option value="">— None —</option>
+              {likelyWaitresses.length > 0 && (
+                <optgroup label="Likely matches">
+                  {likelyWaitresses.map((m) => (
+                    <option key={m.name} value={m.name}>
+                      {m.name} ({Math.round(m.score * 100)}%)
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              <optgroup label="All known waitresses">
+                {otherWaitresses.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </optgroup>
+              <option value={MANUAL_WAITRESS}>Other / new name…</option>
+            </select>
+          ) : (
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                value={order.waitress}
+                onChange={(e) => updateField("waitress", e.target.value)}
+                placeholder="Type waitress name"
+                style={inputStyle}
+              />
+              {(likelyWaitresses.length > 0 || otherWaitresses.length > 0) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWaitressMode("select");
+                    updateField("waitress", "");
+                  }}
+                  style={secondaryButtonStyle}
+                >
+                  Back to list
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
         <Field
           label="Date"

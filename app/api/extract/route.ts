@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { ORDER_SLIP_SCHEMA, type OrderSlipExtraction, type OrderSlipItem } from "@/lib/extractSchema";
 import { readTab } from "@/lib/googleSheets";
 import { matchCustomer } from "@/lib/customerMatch";
+import { loadKnownWaitressNames, loadKnownWalkInNames } from "@/lib/knownNames";
 import {
   loadItemCodeTemplate,
   matchItemCodeCandidates,
@@ -15,6 +16,8 @@ const client = new Anthropic();
 // A match below this score is too weak to auto-suggest — the raw
 // handwriting is shown instead and the user picks manually.
 const CUSTOMER_MATCH_THRESHOLD = 0.5;
+// Same idea for waitress names against past saves -- see lib/knownNames.ts.
+const WAITRESS_MATCH_THRESHOLD = 0.5;
 
 const SYSTEM_PROMPT = `You are reading a photograph of a handwritten bar / restaurant / yacht club order slip (a sales/order slip from a members' club, e.g. PGYC).
 
@@ -205,29 +208,57 @@ export async function POST(req: Request) {
 
     // Always fetch the customer list (the verification screen needs it for
     // its dropdown even when the handwriting couldn't be read at all).
+    // Non-members aren't in the Customers tab by definition -- matching
+    // their handwritten name against it would just suggest an unrelated
+    // member who happens to sound similar. Match against past walk-in
+    // names instead (self-correcting: fixing a misread walk-in name once
+    // makes it a known name next time -- see lib/knownNames.ts).
     try {
-      const customerRows = await readTab("Customers");
-      const names = customerRows.map((row) => row[0]).filter((name): name is string => Boolean(name?.trim()));
-      extraction.customer_list = names;
-
-      // Non-members aren't in the Customers tab by definition -- matching
-      // their handwritten name against it would just suggest an unrelated
-      // member who happens to sound similar. Use the OCR reading as-is
-      // instead, pre-filled for manual editing (see VerificationForm.tsx's
-      // customerMode default).
       if (memberStatus === "Non-Member") {
-        extraction.customer_suggested = extraction.customer_written;
-      } else if (extraction.customer_written) {
-        const matches = matchCustomer(extraction.customer_written, names);
-        extraction.customer_matches = matches;
-        extraction.customer_suggested =
-          matches[0] && matches[0].score >= CUSTOMER_MATCH_THRESHOLD ? matches[0].name : "";
+        const names = await loadKnownWalkInNames();
+        extraction.customer_list = names;
+        if (extraction.customer_written) {
+          const matches = matchCustomer(extraction.customer_written, names);
+          extraction.customer_matches = matches;
+          extraction.customer_suggested =
+            matches[0] && matches[0].score >= CUSTOMER_MATCH_THRESHOLD
+              ? matches[0].name
+              : extraction.customer_written;
+        }
+      } else {
+        const customerRows = await readTab("Customers");
+        const names = customerRows.map((row) => row[0]).filter((name): name is string => Boolean(name?.trim()));
+        extraction.customer_list = names;
+        if (extraction.customer_written) {
+          const matches = matchCustomer(extraction.customer_written, names);
+          extraction.customer_matches = matches;
+          extraction.customer_suggested =
+            matches[0] && matches[0].score >= CUSTOMER_MATCH_THRESHOLD ? matches[0].name : "";
+        }
       }
     } catch {
       // Customer lookup failing shouldn't block the extraction — the user
       // can still type the name manually on the verification screen.
       extraction.customer_matches = [];
       extraction.customer_list = [];
+    }
+
+    // Same idea for the waitress name -- auto-correct to a known name when
+    // confident, and always send the full list + scored matches so the
+    // form can offer it as a pick, not just free text.
+    try {
+      const waitressNames = await loadKnownWaitressNames();
+      extraction.waitress_list = waitressNames;
+      if (extraction.waitress) {
+        const matches = matchCustomer(extraction.waitress, waitressNames);
+        extraction.waitress_matches = matches;
+        if (matches[0] && matches[0].score >= WAITRESS_MATCH_THRESHOLD) {
+          extraction.waitress = matches[0].name;
+        }
+      }
+    } catch {
+      extraction.waitress_matches = [];
+      extraction.waitress_list = [];
     }
 
     // Sent back alongside the extraction so the verification form can
