@@ -1,11 +1,15 @@
 import type { EditableOrder } from "@/components/VerificationForm";
 
-// Matches the real Sales Orders header row exactly (confirmed 2026-08-14):
-// Name, Class, Order Slip Date, Order Slip Number, AR NO. , Terms, Memo,
-// Class, QTY, Invoice Class, Item, Description, Rate, Amount — with the
+// Matches the real Sales Orders header row exactly: Name, Class, Order Slip
+// Date, Order Slip Number, AR NO. , Terms, Memo, Class, QTY, Invoice Class,
+// Item, Description, Rate, Amount, Waitress (Waitress added 2026-08-15,
+// appended as the 15th column rather than inserted among the existing ones,
+// so nothing that reads this sheet by position gets shifted) — with the
 // Class column appearing twice (B and H). Class is per-item (Restaurant or
 // Bar, depending on the item), not per-order, so rows for the same order
-// can carry different Class values.
+// can carry different Class values. Memo holds only the slip's own
+// memo/note text now -- Waitress used to be folded into it (no column of
+// its own existed yet) but that's no longer needed.
 // A leading apostrophe tells Sheets' USER_ENTERED parser to store the value
 // as literal text instead of auto-parsing it — without this, a date-looking
 // string like "8/27/25" gets converted into a date serial number, which
@@ -18,10 +22,6 @@ function asLiteralText(value: string): string {
 
 export function buildSalesOrderRows(order: EditableOrder, arNumber: string): (string | number)[][] {
   const customerName = order.customer_suggested || order.customer_written;
-  // Waitress has no sheet column of its own -- folded into Memo here, right
-  // at the point of writing, rather than earlier in extraction/editing where
-  // it's kept as its own field (see app/api/extract/route.ts).
-  const memo = order.waitress ? [`Waitress: ${order.waitress}`, order.memo].filter(Boolean).join("; ") : order.memo;
 
   return order.items.map((item) => [
     customerName,
@@ -30,7 +30,7 @@ export function buildSalesOrderRows(order: EditableOrder, arNumber: string): (st
     asLiteralText(order.order_slip_number),
     arNumber,
     order.terms,
-    memo,
+    order.memo,
     item.class,
     item.qty,
     item.invoice_class,
@@ -38,5 +38,6 @@ export function buildSalesOrderRows(order: EditableOrder, arNumber: string): (st
     item.description,
     item.rate,
     item.amount,
+    order.waitress,
   ]);
 }

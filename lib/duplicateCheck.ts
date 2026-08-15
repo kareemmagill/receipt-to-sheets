@@ -9,7 +9,7 @@ export interface DuplicateCheckResult {
 
 // Sales Orders columns: Name(0), Class(1), Order Slip Date(2), Order Slip
 // Number(3), AR NO.(4), Terms(5), Memo(6), Class(7), QTY(8), Invoice
-// Class(9), Item(10), Description(11), Rate(12), Amount(13)
+// Class(9), Item(10), Description(11), Rate(12), Amount(13), Waitress(14)
 const NAME_COL = 0;
 const DATE_COL = 2;
 const SLIP_NUM_COL = 3;
