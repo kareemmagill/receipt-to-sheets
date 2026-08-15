@@ -28,8 +28,17 @@ export default function ReportsPage() {
   const [monthFilter, setMonthFilter] = useState("");
   const [search, setSearch] = useState("");
 
+  const [loadAttempt, setLoadAttempt] = useState(0);
+
   useEffect(() => {
-    fetch("/api/reports")
+    // Without this, a genuinely stuck request (slow/dropped connection --
+    // more likely over the yacht club's WiFi than on a home connection)
+    // just sits on "Loading…" forever with no feedback. 20s is generous
+    // for what's normally well under a second locally.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20_000);
+
+    fetch("/api/reports", { signal: controller.signal })
       .then((res) => res.json())
       .then((data) => {
         if (!data.ok) {
@@ -39,13 +48,34 @@ export default function ReportsPage() {
         }
         setItemMonthly(data.itemMonthly);
         setCustomerMonthly(data.customerMonthly);
+        // Defaults to the most recent month instead of "All months" --
+        // rendering every day of every month's item breakdown at once
+        // (thousands of rows) is unnecessary on first load and can make a
+        // phone browser feel stuck even after the data has arrived.
+        const realMonths = [...new Set<string>(data.itemMonthly.map((r: ItemMonthlyTotal) => r.monthKey))]
+          .filter((m) => m !== "Unknown")
+          .sort();
+        const mostRecent = realMonths[realMonths.length - 1];
+        if (mostRecent) setMonthFilter(mostRecent);
         setStatus("ready");
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : String(err));
+        setError(
+          err instanceof Error && err.name === "AbortError"
+            ? "Timed out waiting for a response -- check your connection and try again."
+            : err instanceof Error
+              ? err.message
+              : String(err)
+        );
         setStatus("error");
-      });
-  }, []);
+      })
+      .finally(() => clearTimeout(timeout));
+
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [loadAttempt]);
 
   const months = useMemo(() => {
     const set = new Set(itemMonthly.map((r) => r.monthKey));
@@ -86,7 +116,21 @@ export default function ReportsPage() {
       </div>
 
       {status === "loading" && <p>Loading…</p>}
-      {status === "error" && <p style={{ color: "#b00020" }}>Error: {error}</p>}
+      {status === "error" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
+          <p style={{ color: "#b00020" }}>Error: {error}</p>
+          <button
+            onClick={() => {
+              setStatus("loading");
+              setError(null);
+              setLoadAttempt((n) => n + 1);
+            }}
+            style={selectStyle}
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {status === "ready" && (
         <>
