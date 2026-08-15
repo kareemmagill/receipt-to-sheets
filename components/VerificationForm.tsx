@@ -13,6 +13,32 @@ const MANUAL_CUSTOMER = "__MANUAL__";
 const CLASS_OPTIONS = ["Restaurant", "Bar"];
 const TERMS_OPTIONS = ["COD", "CREDIT"];
 
+interface UncertainFields {
+  top: Set<string>;
+  items: Map<number, Set<string>>;
+}
+
+// Entries look like "order_slip_date" or "items[1].rate", sometimes with a
+// parenthetical explanation appended server-side (e.g. "items[0].item (no
+// confident code match — check manually)") -- the field path itself never
+// contains a space, so splitting on the first space strips that cleanly.
+function parseUncertainFields(raw: string[]): UncertainFields {
+  const top = new Set<string>();
+  const items = new Map<number, Set<string>>();
+  for (const entry of raw) {
+    const path = entry.split(" ")[0];
+    const itemMatch = path.match(/^items\[(\d+)]\.(\w+)$/);
+    if (itemMatch) {
+      const index = Number(itemMatch[1]);
+      if (!items.has(index)) items.set(index, new Set());
+      items.get(index)!.add(itemMatch[2]);
+    } else {
+      top.add(path);
+    }
+  }
+  return { top, items };
+}
+
 function toEditable(extraction: OrderSlipExtraction): EditableOrder {
   return {
     customer_written: extraction.customer_written,
@@ -64,6 +90,8 @@ export default function VerificationForm({
     order.customer_suggested ? "select" : order.customer_written ? "select" : "manual"
   );
   const [customerError, setCustomerError] = useState<string | null>(null);
+
+  const uncertain = parseUncertainFields(extraction.uncertain_fields);
 
   const likelyMatches = (extraction.customer_matches ?? []).filter((m) => m.score >= 0.3);
   const likelyNames = new Set(likelyMatches.map((m) => m.name));
@@ -139,29 +167,11 @@ export default function VerificationForm({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {extraction.uncertain_fields.length > 0 && (
-        <div
-          style={{
-            background: "#fff8e1",
-            border: "1px solid #e0b400",
-            borderRadius: 8,
-            padding: "10px 12px",
-            fontSize: 12,
-            color: "#6b5200",
-          }}
-        >
-          <strong>Double-check these before saving:</strong>
-          <ul style={{ margin: "4px 0 0 18px", padding: 0 }}>
-            {extraction.uncertain_fields.map((f) => (
-              <li key={f}>{f}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={fieldLabelStyle}>Customer / Name</span>
+          <span style={{ ...fieldLabelStyle, color: uncertain.top.has("customer_written") ? "#b00020" : fieldLabelStyle.color }}>
+            Customer / Name
+          </span>
 
           {customerMode === "select" ? (
             <select
@@ -220,15 +230,38 @@ export default function VerificationForm({
           {customerError && <span style={{ fontSize: 12, color: "#b00020" }}>{customerError}</span>}
         </div>
 
-        <Field label="Order Slip Date" value={order.order_slip_date} onChange={(v) => updateField("order_slip_date", v)} />
-        <Field label="Order Slip Number" value={order.order_slip_number} onChange={(v) => updateField("order_slip_number", v)} />
-        <SelectField label="Terms" value={order.terms} options={TERMS_OPTIONS} onChange={(v) => updateField("terms", v)} />
-        <Field label="Memo" value={order.memo} onChange={(v) => updateField("memo", v)} />
+        <Field
+          label="Order Slip Date"
+          value={order.order_slip_date}
+          onChange={(v) => updateField("order_slip_date", v)}
+          uncertain={uncertain.top.has("order_slip_date")}
+        />
+        <Field
+          label="Order Slip Number"
+          value={order.order_slip_number}
+          onChange={(v) => updateField("order_slip_number", v)}
+          uncertain={uncertain.top.has("order_slip_number")}
+        />
+        <SelectField
+          label="Terms"
+          value={order.terms}
+          options={TERMS_OPTIONS}
+          onChange={(v) => updateField("terms", v)}
+          uncertain={uncertain.top.has("terms")}
+        />
+        <Field
+          label="Memo"
+          value={order.memo}
+          onChange={(v) => updateField("memo", v)}
+          uncertain={uncertain.top.has("memo") || uncertain.top.has("waitress_written")}
+        />
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <h2 style={{ fontSize: 16 }}>Items</h2>
-        {order.items.map((item, index) => (
+        {order.items.map((item, index) => {
+          const itemUncertain = uncertain.items.get(index) ?? new Set<string>();
+          return (
           <div
             key={item.id}
             style={{
@@ -246,8 +279,18 @@ export default function VerificationForm({
                 Delete
               </button>
             </div>
-            <Field label="Item" value={item.item} onChange={(v) => updateItem(item.id, "item", v)} />
-            <Field label="Description" value={item.description} onChange={(v) => updateItem(item.id, "description", v)} />
+            <Field
+              label="Item"
+              value={item.item}
+              onChange={(v) => updateItem(item.id, "item", v)}
+              uncertain={itemUncertain.has("item")}
+            />
+            <Field
+              label="Description"
+              value={item.description}
+              onChange={(v) => updateItem(item.id, "description", v)}
+              uncertain={itemUncertain.has("description")}
+            />
             {(item.candidates ?? [])
               .filter((c) => c.score >= 0.3 && c.description !== item.description).length > 0 && (
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -267,9 +310,24 @@ export default function VerificationForm({
               </div>
             )}
             <div style={{ display: "flex", gap: 8 }}>
-              <Field label="QTY" value={item.qty} onChange={(v) => updateItem(item.id, "qty", v)} />
-              <Field label="Rate" value={item.rate} onChange={(v) => updateItem(item.id, "rate", v)} />
-              <Field label="Amount" value={item.amount} onChange={(v) => updateItem(item.id, "amount", v)} />
+              <Field
+                label="QTY"
+                value={item.qty}
+                onChange={(v) => updateItem(item.id, "qty", v)}
+                uncertain={itemUncertain.has("qty")}
+              />
+              <Field
+                label="Rate"
+                value={item.rate}
+                onChange={(v) => updateItem(item.id, "rate", v)}
+                uncertain={itemUncertain.has("rate")}
+              />
+              <Field
+                label="Amount"
+                value={item.amount}
+                onChange={(v) => updateItem(item.id, "amount", v)}
+                uncertain={itemUncertain.has("amount")}
+              />
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <SelectField
@@ -277,6 +335,7 @@ export default function VerificationForm({
                 value={item.class}
                 options={CLASS_OPTIONS}
                 onChange={(v) => updateItem(item.id, "class", v)}
+                uncertain={itemUncertain.has("class")}
               />
               <SelectField
                 label="Invoice Class"
@@ -286,7 +345,8 @@ export default function VerificationForm({
               />
             </div>
           </div>
-        ))}
+          );
+        })}
         <button onClick={addItem} style={secondaryButtonStyle}>
           + Add Item
         </button>
@@ -308,15 +368,30 @@ function Field({
   label,
   value,
   onChange,
+  uncertain = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  uncertain?: boolean;
 }) {
   return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, fontSize: 13, color: "#333" }}>
+    <label
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        flex: 1,
+        fontSize: 13,
+        color: uncertain ? "#b00020" : "#333",
+      }}
+    >
       {label}
-      <input value={value} onChange={(e) => onChange(e.target.value)} style={inputStyle} />
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ ...inputStyle, ...(uncertain ? uncertainInputStyle : null) }}
+      />
     </label>
   );
 }
@@ -326,16 +401,31 @@ function SelectField({
   value,
   options,
   onChange,
+  uncertain = false,
 }: {
   label: string;
   value: string;
   options: string[];
   onChange: (value: string) => void;
+  uncertain?: boolean;
 }) {
   return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, fontSize: 13, color: "#333" }}>
+    <label
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        flex: 1,
+        fontSize: 13,
+        color: uncertain ? "#b00020" : "#333",
+      }}
+    >
       {label}
-      <select value={value} onChange={(e) => onChange(e.target.value)} style={selectStyle}>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ ...selectStyle, ...(uncertain ? uncertainInputStyle : null) }}
+      >
         <option value="">—</option>
         {options.map((o) => (
           <option key={o} value={o}>
@@ -366,6 +456,11 @@ const selectStyle: React.CSSProperties = {
   borderRadius: 6,
   border: "1px solid #ccc",
   background: "#fff",
+};
+
+const uncertainInputStyle: React.CSSProperties = {
+  borderColor: "#b00020",
+  borderWidth: 2,
 };
 
 const primaryButtonStyle: React.CSSProperties = {
