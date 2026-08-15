@@ -11,7 +11,18 @@ export type EditableOrder = Omit<OrderSlipExtraction, "items" | "uncertain_field
 
 const MANUAL_CUSTOMER = "__MANUAL__";
 const CLASS_OPTIONS = ["Restaurant", "Bar"];
-const TERMS_OPTIONS = ["COD", "CREDIT"];
+const SLIP_TYPE_TOGGLE_OPTIONS = [
+  { value: "Bar", display: "Order Slip (Bar)" },
+  { value: "Restaurant", display: "Food Order Slip" },
+];
+const MEMBER_TOGGLE_OPTIONS = [
+  { value: "Member", display: "Member" },
+  { value: "Non-Member", display: "Non-Member" },
+];
+const PAID_TOGGLE_OPTIONS = [
+  { value: "COD", display: "Paid" },
+  { value: "CREDIT", display: "Not Paid" },
+];
 
 interface UncertainFields {
   top: Set<string>;
@@ -43,6 +54,9 @@ function toEditable(extraction: OrderSlipExtraction): EditableOrder {
   return {
     customer_written: extraction.customer_written,
     customer_suggested: extraction.customer_suggested,
+    waitress: extraction.waitress,
+    slip_type: extraction.slip_type,
+    member_status: extraction.member_status,
     order_slip_date: extraction.order_slip_date,
     order_slip_number: extraction.order_slip_number,
     terms: extraction.terms,
@@ -92,6 +106,8 @@ export default function VerificationForm({
   const [customerError, setCustomerError] = useState<string | null>(null);
 
   const uncertain = parseUncertainFields(extraction.uncertain_fields);
+
+  const total = order.items.reduce((sum, item) => sum + (parseNumeric(item.amount) ?? 0), 0);
 
   const likelyMatches = (extraction.customer_matches ?? []).filter((m) => m.score >= 0.3);
   const likelyNames = new Set(likelyMatches.map((m) => m.name));
@@ -164,6 +180,21 @@ export default function VerificationForm({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <ToggleField
+          label="Slip Type"
+          value={order.slip_type}
+          options={SLIP_TYPE_TOGGLE_OPTIONS}
+          onChange={(v) => updateField("slip_type", v)}
+          uncertain={uncertain.top.has("slip_type")}
+        />
+
+        <Field
+          label="Slip Number"
+          value={order.order_slip_number}
+          onChange={(v) => updateField("order_slip_number", v)}
+          uncertain={uncertain.top.has("order_slip_number")}
+        />
+
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <span style={{ ...fieldLabelStyle, color: uncertain.top.has("customer_written") ? "#b00020" : fieldLabelStyle.color }}>
             Customer / Name
@@ -226,116 +257,146 @@ export default function VerificationForm({
           {customerError && <span style={{ fontSize: 12, color: "#b00020" }}>{customerError}</span>}
         </div>
 
+        <ToggleField
+          label="Member Status"
+          value={order.member_status}
+          options={MEMBER_TOGGLE_OPTIONS}
+          onChange={(v) => updateField("member_status", v)}
+          uncertain={uncertain.top.has("member_status")}
+        />
+
         <Field
-          label="Order Slip Date"
+          label="Waitress"
+          value={order.waitress}
+          onChange={(v) => updateField("waitress", v)}
+          uncertain={uncertain.top.has("waitress") || uncertain.top.has("waitress_written")}
+        />
+
+        <Field
+          label="Date"
           value={order.order_slip_date}
           onChange={(v) => updateField("order_slip_date", v)}
           uncertain={uncertain.top.has("order_slip_date")}
         />
-        <Field
-          label="Order Slip Number"
-          value={order.order_slip_number}
-          onChange={(v) => updateField("order_slip_number", v)}
-          uncertain={uncertain.top.has("order_slip_number")}
-        />
-        <SelectField
-          label="Terms"
-          value={order.terms}
-          options={TERMS_OPTIONS}
-          onChange={(v) => updateField("terms", v)}
-          uncertain={uncertain.top.has("terms")}
-        />
+
         <Field
           label="Memo"
           value={order.memo}
           onChange={(v) => updateField("memo", v)}
-          uncertain={uncertain.top.has("memo") || uncertain.top.has("waitress_written")}
+          uncertain={uncertain.top.has("memo")}
         />
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <h2 style={{ fontSize: 16 }}>Items</h2>
         {order.items.map((item, index) => {
           const itemUncertain = uncertain.items.get(index) ?? new Set<string>();
           return (
-          <div
-            key={item.id}
-            style={{
-              border: "1px solid #ccc",
-              borderRadius: 8,
-              padding: 12,
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <strong style={{ fontSize: 13, color: "#555" }}>Item {index + 1}</strong>
-              <button onClick={() => deleteItem(item.id)} style={deleteButtonStyle}>
-                Delete
-              </button>
-            </div>
-            <Field
-              label="Item"
-              value={item.item}
-              onChange={(v) => updateItem(item.id, "item", v)}
-              uncertain={itemUncertain.has("item")}
-            />
-            <Field
-              label="Description"
-              value={item.description}
-              onChange={(v) => updateItem(item.id, "description", v)}
-              uncertain={itemUncertain.has("description")}
-            />
-            {(item.candidates ?? [])
-              .filter((c) => c.score >= 0.3 && c.description !== item.description).length > 0 && (
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {(item.candidates ?? [])
-                  .filter((c) => c.score >= 0.3 && c.description !== item.description)
-                  .slice(0, 4)
-                  .map((c) => (
-                    <button
-                      key={c.itemCode}
-                      type="button"
-                      onClick={() => applyItemCandidate(item.id, c)}
-                      style={chipButtonStyle}
-                    >
-                      {c.description} ({Math.round(c.score * 100)}%)
-                    </button>
-                  ))}
+            <div
+              key={item.id}
+              style={{
+                border: "1px solid #ccc",
+                borderRadius: 8,
+                padding: 10,
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+              }}
+            >
+              <div style={{ display: "flex", gap: 6, alignItems: "flex-end", flexWrap: "wrap" }}>
+                <div style={{ width: 52 }}>
+                  <Field
+                    label="QTY"
+                    value={item.qty}
+                    onChange={(v) => updateItem(item.id, "qty", v)}
+                    uncertain={itemUncertain.has("qty")}
+                  />
+                </div>
+                <div style={{ flex: 1, minWidth: 120 }}>
+                  <Field
+                    label="Description"
+                    value={item.description}
+                    onChange={(v) => updateItem(item.id, "description", v)}
+                    uncertain={itemUncertain.has("description")}
+                  />
+                </div>
+                <div style={{ width: 90 }}>
+                  <Field
+                    label="Item Code"
+                    value={item.item}
+                    onChange={(v) => updateItem(item.id, "item", v)}
+                    uncertain={itemUncertain.has("item")}
+                  />
+                </div>
+                <div style={{ width: 76 }}>
+                  <Field
+                    label="Amount"
+                    value={item.amount}
+                    onChange={(v) => updateItem(item.id, "amount", v)}
+                    uncertain={itemUncertain.has("amount")}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => deleteItem(item.id)}
+                  aria-label="Delete item"
+                  style={deleteIconButtonStyle}
+                >
+                  ×
+                </button>
               </div>
-            )}
-            <div style={{ display: "flex", gap: 8 }}>
-              <Field
-                label="QTY"
-                value={item.qty}
-                onChange={(v) => updateItem(item.id, "qty", v)}
-                uncertain={itemUncertain.has("qty")}
-              />
-              <Field label="Rate" value={item.rate} onChange={() => {}} readOnly />
-              <Field
-                label="Amount"
-                value={item.amount}
-                onChange={(v) => updateItem(item.id, "amount", v)}
-                uncertain={itemUncertain.has("amount")}
-              />
+
+              {(item.candidates ?? [])
+                .filter((c) => c.score >= 0.3 && c.description !== item.description).length > 0 && (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {(item.candidates ?? [])
+                    .filter((c) => c.score >= 0.3 && c.description !== item.description)
+                    .slice(0, 4)
+                    .map((c) => (
+                      <button
+                        key={c.itemCode}
+                        type="button"
+                        onClick={() => applyItemCandidate(item.id, c)}
+                        style={chipButtonStyle}
+                      >
+                        {c.description} ({Math.round(c.score * 100)}%)
+                      </button>
+                    ))}
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ width: 76 }}>
+                  <Field label="Rate" value={item.rate} onChange={() => {}} readOnly />
+                </div>
+                <SelectField
+                  label="Class"
+                  value={item.class}
+                  options={CLASS_OPTIONS}
+                  onChange={(v) => updateItem(item.id, "class", v)}
+                  uncertain={itemUncertain.has("class")}
+                />
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <SelectField
-                label="Class"
-                value={item.class}
-                options={CLASS_OPTIONS}
-                onChange={(v) => updateItem(item.id, "class", v)}
-                uncertain={itemUncertain.has("class")}
-              />
-            </div>
-          </div>
           );
         })}
         <button onClick={addItem} style={secondaryButtonStyle}>
           + Add Item
         </button>
+
+        <div style={totalRowStyle}>
+          <span>Total</span>
+          <span>{formatAmount(total)}</span>
+        </div>
       </div>
+
+      <ToggleField
+        label="Payment"
+        value={order.terms}
+        options={PAID_TOGGLE_OPTIONS}
+        onChange={(v) => updateField("terms", v)}
+        uncertain={uncertain.top.has("terms")}
+      />
 
       <div style={{ display: "flex", gap: 12 }}>
         <button onClick={onRetake} disabled={saving} style={secondaryButtonStyle}>
@@ -344,6 +405,42 @@ export default function VerificationForm({
         <button onClick={handleConfirmClick} disabled={saving} style={{ ...primaryButtonStyle, flex: 1 }}>
           {saving ? "Saving…" : "Confirm & Save"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+function ToggleField({
+  label,
+  value,
+  options,
+  onChange,
+  uncertain = false,
+}: {
+  label: string;
+  value: string;
+  options: { value: string; display: string }[];
+  onChange: (value: string) => void;
+  uncertain?: boolean;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span style={{ ...fieldLabelStyle, color: uncertain ? "#b00020" : fieldLabelStyle.color }}>{label}</span>
+      <div style={{ display: "flex", gap: 8 }}>
+        {options.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            style={{
+              ...toggleButtonStyle,
+              ...(value === opt.value ? toggleButtonActiveStyle : null),
+              ...(uncertain ? uncertainInputStyle : null),
+            }}
+          >
+            {opt.display}
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -491,12 +588,41 @@ const chipButtonStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const deleteButtonStyle: React.CSSProperties = {
-  padding: "4px 10px",
-  fontSize: 12,
+const deleteIconButtonStyle: React.CSSProperties = {
+  width: 34,
+  height: 42,
+  fontSize: 18,
+  lineHeight: 1,
   borderRadius: 6,
   border: "1px solid #b00020",
   background: "#fff",
   color: "#b00020",
   cursor: "pointer",
+  flexShrink: 0,
+};
+
+const toggleButtonStyle: React.CSSProperties = {
+  flex: 1,
+  padding: "10px 12px",
+  fontSize: 14,
+  borderRadius: 6,
+  border: "1px solid #ccc",
+  background: "#fff",
+  color: "#333",
+  cursor: "pointer",
+};
+
+const toggleButtonActiveStyle: React.CSSProperties = {
+  background: "#171717",
+  borderColor: "#171717",
+  color: "#fff",
+};
+
+const totalRowStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  fontSize: 15,
+  fontWeight: 600,
+  padding: "8px 4px",
+  borderTop: "2px solid #ccc",
 };
