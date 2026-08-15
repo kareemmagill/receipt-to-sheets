@@ -21,6 +21,10 @@ export const ORDER_SLIP_SCHEMA = {
   type: "object",
   properties: {
     customer_written: { type: "string", description: "Customer/member name exactly as handwritten. Empty string if unreadable." },
+    waitress_written: {
+      type: "string",
+      description: "The waiter/waitress name, if written on the slip -- often a second handwritten line near the customer name. Never part of customer_written. Empty string if absent/illegible.",
+    },
     slip_type: {
       type: "string",
       enum: ["", "Bar", "Restaurant"],
@@ -43,6 +47,7 @@ export const ORDER_SLIP_SCHEMA = {
   },
   required: [
     "customer_written",
+    "waitress_written",
     "slip_type",
     "order_slip_date",
     "order_slip_number",

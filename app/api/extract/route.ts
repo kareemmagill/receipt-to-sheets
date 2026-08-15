@@ -28,6 +28,7 @@ Rules — follow these exactly:
 - If a field genuinely cannot be read or is not present on the slip, return an empty string for it — never fabricate a value to fill the field.
 - There are two different printed slip forms: a Bar "Order Slip", and a "Food Order Slip" for the Restaurant. Identify which one this is from its heading and set "slip_type" accordingly. This also tells you where to find the slip number: on the Bar Order Slip, "NO"/"NO." is in the top-right corner; on the Food Order Slip (Restaurant), it's in the bottom-right corner. Don't confuse the slip number with an AR number, table number, or phone number.
 - If a "Non-Member" checkbox/marking is ticked, still do your best to read and extract whatever name is actually written on the slip, even if it's messy or only partly legible — a non-member marking does not mean the name should be ignored. Only if the slip is marked Non-Member AND genuinely has no legible name at all, set "customer_written" to exactly "DIRECT SALES- WALK IN" (the club's account for walk-in/non-member sales) as a fallback.
+- The customer/member name is usually followed by a second handwritten line naming the waiter/waitress who took the order — that second line is NOT part of the customer's name. Put it in "waitress_written" instead, and keep "customer_written" to just the customer's own name.
 - "terms" must be exactly "COD" or "CREDIT" (or an empty string if you can't tell): look for an explicit written word ("COD", "Credit", "Charge"), a checked/circled box, or another clear marking distinguishing a member charge account (CREDIT) from a cash-paid order (COD).
 - On these slips, Amount = Rate × QTY for each line. If exactly one of "rate" or "amount" is illegible or missing but the other one and "qty" are both clearly legible, you may compute the missing value from that relationship instead of leaving it blank. Do not do this if two or more of the three values are unclear — leave those blank rather than guessing.
 - For each item line, set "confidence" between 0 and 1 for how sure you are of that line's reading.
@@ -54,6 +55,7 @@ interface RawVisionItem {
 
 interface RawVisionExtraction {
   customer_written?: string;
+  waitress_written?: string;
   slip_type?: string;
   order_slip_date?: string;
   order_slip_number?: string;
@@ -165,13 +167,19 @@ export async function POST(req: Request) {
       };
     });
 
+    // Waitress name isn't its own sheet column -- fold it into Memo,
+    // alongside whatever other memo/note text the slip has.
+    const waitress = (raw.waitress_written ?? "").trim();
+    const rawMemo = raw.memo ?? "";
+    const memo = waitress ? [`Waitress: ${waitress}`, rawMemo].filter(Boolean).join("; ") : rawMemo;
+
     const extraction: OrderSlipExtraction = {
       customer_written: raw.customer_written ?? "",
       customer_suggested: "",
       order_slip_date: raw.order_slip_date ?? "",
       order_slip_number: raw.order_slip_number ?? "",
       terms: raw.terms ?? "",
-      memo: raw.memo ?? "",
+      memo,
       items,
       overall_confidence: raw.overall_confidence ?? 0,
       uncertain_fields: uncertainFields,
