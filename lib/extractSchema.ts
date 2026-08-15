@@ -43,6 +43,11 @@ export const ORDER_SLIP_SCHEMA = {
       enum: ["", "COD", "CREDIT"],
       description: "COD or CREDIT based on what's marked/written on the slip. Empty string if genuinely undeterminable.",
     },
+    member_status: {
+      type: "string",
+      enum: ["", "Member", "Non-Member"],
+      description: "Whether the slip's Member / Non-Member checkbox or marking is set to Member or Non-Member. Empty string if there's no such marking or it's illegible.",
+    },
     memo: { type: "string", description: "Any memo/note text on the slip. Empty string if absent." },
     items: { type: "array", items: ORDER_SLIP_ITEM_SCHEMA, description: "One entry per line item. Repeated identical items are separate lines unless clearly written as one combined quantity." },
     overall_confidence: { type: "number", description: "0 to 1: overall confidence in this extraction." },
@@ -55,6 +60,7 @@ export const ORDER_SLIP_SCHEMA = {
     "order_slip_date",
     "order_slip_number",
     "terms",
+    "member_status",
     "memo",
     "items",
     "overall_confidence",
@@ -80,6 +86,9 @@ export interface OrderSlipItem {
 export interface OrderSlipExtraction {
   customer_written: string;
   customer_suggested: string;
+  waitress: string;
+  slip_type: string; // "Bar" | "Restaurant" | "" — which physical slip form this is
+  member_status: string; // "Member" | "Non-Member" | ""
   order_slip_date: string;
   order_slip_number: string;
   terms: string;

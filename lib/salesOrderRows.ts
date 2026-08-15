@@ -18,6 +18,10 @@ function asLiteralText(value: string): string {
 
 export function buildSalesOrderRows(order: EditableOrder, arNumber: string): (string | number)[][] {
   const customerName = order.customer_suggested || order.customer_written;
+  // Waitress has no sheet column of its own -- folded into Memo here, right
+  // at the point of writing, rather than earlier in extraction/editing where
+  // it's kept as its own field (see app/api/extract/route.ts).
+  const memo = order.waitress ? [`Waitress: ${order.waitress}`, order.memo].filter(Boolean).join("; ") : order.memo;
 
   return order.items.map((item) => [
     customerName,
@@ -26,7 +30,7 @@ export function buildSalesOrderRows(order: EditableOrder, arNumber: string): (st
     asLiteralText(order.order_slip_number),
     arNumber,
     order.terms,
-    order.memo,
+    memo,
     item.class,
     item.qty,
     item.invoice_class,

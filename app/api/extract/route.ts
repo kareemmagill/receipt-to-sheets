@@ -30,6 +30,7 @@ Rules — follow these exactly:
 - If a "Non-Member" checkbox/marking is ticked, still do your best to read and extract whatever name is actually written on the slip, even if it's messy or only partly legible — a non-member marking does not mean the name should be ignored. Only if the slip is marked Non-Member AND genuinely has no legible name at all, set "customer_written" to exactly "DIRECT SALES- WALK IN" (the club's account for walk-in/non-member sales) as a fallback.
 - The customer/member name is usually followed by a second handwritten line naming the waiter/waitress who took the order — that second line is NOT part of the customer's name. Put it in "waitress_written" instead, and keep "customer_written" to just the customer's own name.
 - "terms" must be exactly "COD" or "CREDIT" (or an empty string if you can't tell): look for an explicit written word ("COD", "Credit", "Charge"), a checked/circled box, or another clear marking distinguishing a member charge account (CREDIT) from a cash-paid order (COD).
+- Set "member_status" to "Member" or "Non-Member" based on the slip's Member/Non-Member checkbox or marking (separately from whatever you set "customer_written" to — report this even when a name is legible).
 - The single number written after an item's description is its line total ("amount") — these slips don't have a separate per-unit rate column, so don't try to read one; the app computes it from amount ÷ qty.
 - For each item line, set "confidence" between 0 and 1 for how sure you are of that line's reading.
 - Set "overall_confidence" between 0 and 1 for the whole extraction.
@@ -70,6 +71,7 @@ interface RawVisionExtraction {
   order_slip_date?: string;
   order_slip_number?: string;
   terms?: string;
+  member_status?: string;
   memo?: string;
   items?: RawVisionItem[];
   overall_confidence?: number;
@@ -180,19 +182,22 @@ export async function POST(req: Request) {
       };
     });
 
-    // Waitress name isn't its own sheet column -- fold it into Memo,
-    // alongside whatever other memo/note text the slip has.
-    const waitress = (raw.waitress_written ?? "").trim();
-    const rawMemo = raw.memo ?? "";
-    const memo = waitress ? [`Waitress: ${waitress}`, rawMemo].filter(Boolean).join("; ") : rawMemo;
+    // Waitress is kept as its own field through extraction and the
+    // verification form -- it only gets folded into Memo at the point of
+    // actually writing a sheet row (lib/salesOrderRows.ts), since Memo is
+    // the only column available for it, not before.
+    const memberStatus = raw.member_status === "Member" || raw.member_status === "Non-Member" ? raw.member_status : "";
 
     const extraction: OrderSlipExtraction = {
       customer_written: raw.customer_written ?? "",
       customer_suggested: "",
+      waitress: (raw.waitress_written ?? "").trim(),
+      slip_type: slipType,
+      member_status: memberStatus,
       order_slip_date: raw.order_slip_date ?? "",
       order_slip_number: raw.order_slip_number ?? "",
       terms: raw.terms ?? "",
-      memo,
+      memo: raw.memo ?? "",
       items,
       overall_confidence: raw.overall_confidence ?? 0,
       uncertain_fields: uncertainFields,

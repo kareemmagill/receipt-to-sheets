@@ -22,6 +22,9 @@ function buildOrderFromExtraction(extraction: OrderSlipExtraction): EditableOrde
   return {
     customer_written: extraction.customer_written,
     customer_suggested: extraction.customer_suggested || extraction.customer_written,
+    waitress: extraction.waitress,
+    slip_type: extraction.slip_type,
+    member_status: extraction.member_status,
     order_slip_date: extraction.order_slip_date,
     order_slip_number: extraction.order_slip_number,
     terms: extraction.terms,
