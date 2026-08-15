@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { OrderSlipExtraction } from "@/lib/extractSchema";
 import VerificationForm, { type EditableOrder } from "@/components/VerificationForm";
 import { loadLastPhoto, saveLastPhoto } from "@/lib/lastPhotoStore";
+import { resizeForVisionApi } from "@/lib/resizeImage";
 
 export default function Home() {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -71,10 +72,11 @@ export default function Home() {
     setExtraction(null);
 
     try {
+      const resizedForApi = await resizeForVisionApi(imageDataUrl);
       const res = await fetch("/api/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageDataUrl }),
+        body: JSON.stringify({ imageDataUrl: resizedForApi }),
       });
       const data = await res.json();
 

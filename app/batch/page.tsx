@@ -5,6 +5,7 @@ import Link from "next/link";
 import { makeId } from "@/lib/makeId";
 import type { OrderSlipExtraction } from "@/lib/extractSchema";
 import type { EditableOrder } from "@/components/VerificationForm";
+import { resizeForVisionApi } from "@/lib/resizeImage";
 
 interface QueuedPhoto {
   id: string;
@@ -69,10 +70,11 @@ export default function BatchImportPage() {
     for (const photo of photos) {
       setResult(photo.id, "processing", "Reading slip…");
       try {
+        const resizedForApi = await resizeForVisionApi(photo.dataUrl);
         const extractRes = await fetch("/api/extract", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageDataUrl: photo.dataUrl }),
+          body: JSON.stringify({ imageDataUrl: resizedForApi }),
         });
         const extractData = await extractRes.json();
         if (!extractData.ok) {
