@@ -1,28 +1,24 @@
 import { google } from "googleapis";
 import { Readable } from "stream";
+import { getOAuthClient } from "./googleOAuth";
 
 const FOLDER_NAME = "PGYC Order Slip Photos";
-// Shared with Kareem's own Google account so the folder shows up in his
-// normal Drive, not just the service account's own (very limited) storage.
-const SHARE_WITH_EMAIL = "kareem.magill@gmail.com";
 
-function getAuth() {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-
-  if (!email || !privateKey) {
-    throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_EMAIL or GOOGLE_PRIVATE_KEY env vars");
+// Uploads happen as Kareem's own Google account (via OAuth refresh token),
+// not the service account -- a service account has no storage quota of its
+// own on a regular (non-Workspace) Drive, so file uploads fail with
+// "Service Accounts do not have storage quota" no matter what's shared with
+// them. See lib/googleOAuth.ts and app/api/auth/google/start for how the
+// refresh token this needs gets set up.
+function getDriveClient() {
+  const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
+  if (!refreshToken) {
+    throw new Error("Missing GOOGLE_OAUTH_REFRESH_TOKEN env var -- visit /api/auth/google/start to authorize");
   }
 
-  return new google.auth.JWT({
-    email,
-    key: privateKey,
-    scopes: ["https://www.googleapis.com/auth/drive"],
-  });
-}
-
-function getDriveClient() {
-  return google.drive({ version: "v3", auth: getAuth() });
+  const client = getOAuthClient();
+  client.setCredentials({ refresh_token: refreshToken });
+  return google.drive({ version: "v3", auth: client });
 }
 
 let cachedFolderId: string | null = null;
@@ -51,16 +47,6 @@ async function getOrCreateFolder(): Promise<string> {
 
   const folderId = folder.data.id;
   if (!folderId) throw new Error("Failed to create Drive folder");
-
-  try {
-    await drive.permissions.create({
-      fileId: folderId,
-      requestBody: { type: "user", role: "writer", emailAddress: SHARE_WITH_EMAIL },
-      sendNotificationEmail: false,
-    });
-  } catch {
-    // Non-fatal — uploads still work even if sharing failed for some reason.
-  }
 
   cachedFolderId = folderId;
   return folderId;
