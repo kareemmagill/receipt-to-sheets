@@ -8,21 +8,34 @@ interface Status {
   lastOrder: { slipNumber: string; arNumber: string; customer: string; itemCount: number } | null;
 }
 
+interface Record {
+  slipNumber: string;
+  arNumber: string;
+  customer: string;
+  summary: string;
+  total: number;
+}
+
 function describeOrder(order: { slipNumber: string; arNumber: string; customer: string; itemCount: number }) {
   const label = order.slipNumber ? `Slip #${order.slipNumber}` : order.arNumber ? order.arNumber : "(no slip number)";
   return `${label}, ${order.customer}, ${order.itemCount} row${order.itemCount === 1 ? "" : "s"}`;
 }
 
+function formatMoney(n: number): string {
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 export default function DevelopmentPage() {
   const [status, setStatus] = useState<Status | null>(null);
+  const [records, setRecords] = useState<Record[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"last" | "all" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  // Used to re-fetch status after a delete (not on mount -- see the effect
-  // below, which duplicates this fetch inline rather than calling out to
-  // this function, since a lint rule can't verify a called-out function's
+  // Used to re-fetch after a delete (not on mount -- see the effect below,
+  // which duplicates these fetches inline rather than calling out to these
+  // functions, since a lint rule can't verify a called-out function's
   // setState calls are safely inside a promise callback).
   function refreshStatus() {
     setError(null);
@@ -38,6 +51,16 @@ export default function DevelopmentPage() {
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
   }
 
+  function refreshRecords() {
+    return fetch("/api/dev/records")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.ok) return;
+        setRecords(data.records);
+      })
+      .catch(() => {});
+  }
+
   useEffect(() => {
     fetch("/api/dev/status")
       .then((res) => res.json())
@@ -50,6 +73,14 @@ export default function DevelopmentPage() {
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => setLoading(false));
+
+    fetch("/api/dev/records")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.ok) return;
+        setRecords(data.records);
+      })
+      .catch(() => {});
   }, []);
 
   async function handleDeleteLast() {
@@ -71,6 +102,7 @@ export default function DevelopmentPage() {
       const label = data.slipNumber ? `Slip #${data.slipNumber}` : data.arNumber || "unlabeled";
       setMessage(`Deleted ${data.deleted} row${data.deleted === 1 ? "" : "s"} (${label}).`);
       refreshStatus();
+      refreshRecords();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -99,6 +131,7 @@ export default function DevelopmentPage() {
       }
       setMessage(`Deleted ${data.deleted} row${data.deleted === 1 ? "" : "s"}.`);
       refreshStatus();
+      refreshRecords();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -109,7 +142,7 @@ export default function DevelopmentPage() {
   return (
     <main
       style={{
-        maxWidth: 480,
+        maxWidth: 720,
         margin: "0 auto",
         padding: "24px 16px",
         display: "flex",
@@ -139,23 +172,63 @@ export default function DevelopmentPage() {
             {status.lastOrder && <> Last record: {describeOrder(status.lastOrder)}.</>}
           </p>
 
-          <button
-            onClick={handleDeleteLast}
-            disabled={!status.lastOrder || busy !== null}
-            style={dangerButtonStyle}
-          >
-            {busy === "last" ? "Deleting…" : "Delete Last Record"}
-          </button>
+          <div style={{ display: "flex", gap: 12 }}>
+            <button
+              onClick={handleDeleteLast}
+              disabled={!status.lastOrder || busy !== null}
+              style={dangerButtonStyle}
+            >
+              {busy === "last" ? "Deleting…" : "Delete Last Record"}
+            </button>
 
-          <button
-            onClick={handleDeleteAll}
-            disabled={status.totalRows === 0 || busy !== null}
-            style={dangerButtonStyle}
-          >
-            {busy === "all" ? "Deleting…" : "Delete All Records"}
-          </button>
+            <button
+              onClick={handleDeleteAll}
+              disabled={status.totalRows === 0 || busy !== null}
+              style={dangerButtonStyle}
+            >
+              {busy === "all" ? "Deleting…" : "Delete All Records"}
+            </button>
+          </div>
         </div>
       )}
+
+      <section>
+        <h2 style={{ fontSize: 16, marginBottom: 8 }}>Records (most recent first)</h2>
+        <div style={{ overflowX: "auto" }}>
+          <table style={tableStyle}>
+            <thead>
+              <tr>
+                <th style={thStyle}>Name</th>
+                <th style={thStyle}>Order Summary</th>
+                <th style={{ ...thStyle, textAlign: "right" }}>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(records ?? []).map((r, i) => (
+                <tr key={`${r.slipNumber || r.arNumber}|${i}`}>
+                  <td style={tdStyle}>{r.customer}</td>
+                  <td style={tdStyle}>{r.summary}</td>
+                  <td style={{ ...tdStyle, textAlign: "right" }}>{formatMoney(r.total)}</td>
+                </tr>
+              ))}
+              {records && records.length === 0 && (
+                <tr>
+                  <td style={tdStyle} colSpan={3}>
+                    No records.
+                  </td>
+                </tr>
+              )}
+              {!records && (
+                <tr>
+                  <td style={tdStyle} colSpan={3}>
+                    Loading…
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </main>
   );
 }
@@ -168,4 +241,22 @@ const dangerButtonStyle: React.CSSProperties = {
   background: "#fff",
   color: "#b00020",
   cursor: "pointer",
+};
+
+const tableStyle: React.CSSProperties = {
+  width: "100%",
+  borderCollapse: "collapse",
+  fontSize: 13,
+};
+
+const thStyle: React.CSSProperties = {
+  textAlign: "left",
+  padding: "6px 8px",
+  borderBottom: "2px solid #ccc",
+  whiteSpace: "nowrap",
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: "6px 8px",
+  borderBottom: "1px solid #eee",
 };
