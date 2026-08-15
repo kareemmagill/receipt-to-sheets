@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import type { CustomerMonthlyTotal, ItemMonthlyTotal } from "@/lib/reports";
+import type { CustomerMonthlyTotal, CustomerOrderLine, ItemMonthlyTotal } from "@/lib/reports";
 
 function formatMonth(monthKey: string): string {
   if (monthKey === "Unknown") return "Unknown / unparsed date";
@@ -25,6 +25,7 @@ export default function ReportsPage() {
   const [error, setError] = useState<string | null>(null);
   const [itemMonthly, setItemMonthly] = useState<ItemMonthlyTotal[]>([]);
   const [customerMonthly, setCustomerMonthly] = useState<CustomerMonthlyTotal[]>([]);
+  const [customerOrderLines, setCustomerOrderLines] = useState<CustomerOrderLine[]>([]);
   const [monthFilter, setMonthFilter] = useState("");
   const [search, setSearch] = useState("");
 
@@ -48,6 +49,7 @@ export default function ReportsPage() {
         }
         setItemMonthly(data.itemMonthly);
         setCustomerMonthly(data.customerMonthly);
+        setCustomerOrderLines(data.customerOrderLines ?? []);
         // Defaults to the most recent month instead of "All months" --
         // rendering every day of every month's item breakdown at once
         // (thousands of rows) is unnecessary on first load and can make a
@@ -105,6 +107,13 @@ export default function ReportsPage() {
     matchingCustomers.length > 0
       ? matchingCustomers.reduce((sum, r) => sum + r.total, 0)
       : filteredItems.reduce((sum, r) => sum + r.total, 0);
+
+  // The actual line items behind the customer total above -- unaggregated,
+  // so it's a real order-by-order breakdown, not another rollup.
+  const matchedCustomerNameSet = new Set(matchedCustomerNames);
+  const customerLines = customerOrderLines.filter(
+    (l) => matchedCustomerNameSet.has(l.customer) && (!monthFilter || l.monthKey === monthFilter)
+  );
 
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: "24px 16px", display: "flex", flexDirection: "column", gap: 20 }}>
@@ -173,12 +182,47 @@ export default function ReportsPage() {
             />
           </div>
 
-          {/* The item table is search-by-item only -- with a customer name
-              matching, it would always show an empty "No data" table right
-              under a correct total, which reads as broken rather than as
-              working-as-designed. Hide it in that case instead. */}
+          {/* The item table is search-by-item only, and would show an
+              always-empty "No data" row under a customer-name search --
+              show that customer's actual order lines instead, so the
+              total above is traceable to real orders, not just a number. */}
           {matchedCustomerNames.length > 0 ? (
-            <p style={{ fontSize: 13, color: "#777" }}>Clear the search to see item-by-item sales again.</p>
+            <section>
+              <h2 style={{ fontSize: 16, marginBottom: 8 }}>
+                Orders for {matchedCustomerNames.length === 1 ? matchedCustomerNames[0] : "matching customers"}
+              </h2>
+              <div style={{ overflowX: "auto" }}>
+                <table style={tableStyle}>
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>Date</th>
+                      {matchedCustomerNames.length > 1 && <th style={thStyle}>Customer</th>}
+                      <th style={thStyle}>Item</th>
+                      <th style={{ ...thStyle, textAlign: "right" }}>Qty</th>
+                      <th style={{ ...thStyle, textAlign: "right" }}>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {customerLines.map((l, i) => (
+                      <tr key={`${l.dateKey}|${l.customer}|${l.item}|${i}`}>
+                        <td style={tdStyle}>{formatShortDate(l.dateKey)}</td>
+                        {matchedCustomerNames.length > 1 && <td style={tdStyle}>{l.customer}</td>}
+                        <td style={tdStyle}>{l.item}</td>
+                        <td style={{ ...tdStyle, textAlign: "right" }}>{l.qty}</td>
+                        <td style={{ ...tdStyle, textAlign: "right" }}>{formatMoney(l.amount)}</td>
+                      </tr>
+                    ))}
+                    {customerLines.length === 0 && (
+                      <tr>
+                        <td style={tdStyle} colSpan={matchedCustomerNames.length > 1 ? 5 : 4}>
+                          No data.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           ) : (
             <section>
               <h2 style={{ fontSize: 16, marginBottom: 8 }}>Sales by Menu Item, by Date</h2>

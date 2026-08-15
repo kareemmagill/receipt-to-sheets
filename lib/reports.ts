@@ -14,6 +14,18 @@ export interface ItemMonthlyTotal {
   total: number;
 }
 
+// Unaggregated -- one entry per real sheet row, so a customer's total (from
+// customerMonthly) can be broken back down into the actual line items that
+// add up to it, e.g. on the reports page when a customer search matches.
+export interface CustomerOrderLine {
+  customer: string;
+  monthKey: string;
+  dateKey: string;
+  item: string;
+  qty: number;
+  amount: number;
+}
+
 // Sales Orders columns: Name(0), Class(1), Order Slip Date(2), Order Slip
 // Number(3), AR NO.(4), Terms(5), Memo(6), Class(7), QTY(8), Invoice
 // Class(9), Item(10), Description(11), Rate(12), Amount(13)
@@ -56,6 +68,7 @@ function dateKeyFrom(raw: string): string {
 export async function computeSalesReports(): Promise<{
   customerMonthly: CustomerMonthlyTotal[];
   itemMonthly: ItemMonthlyTotal[];
+  customerOrderLines: CustomerOrderLine[];
 }> {
   const rows = await readTab("Sales Orders");
   const dataRows = rows.slice(1); // skip header
@@ -64,6 +77,7 @@ export async function computeSalesReports(): Promise<{
   // Item sales are tracked per exact day, not aggregated across the whole
   // month -- the Menu Item report shows individual dates.
   const itemMap = new Map<string, { qty: number; total: number }>();
+  const customerOrderLines: CustomerOrderLine[] = [];
 
   for (const row of dataRows) {
     const name = (row[NAME_COL] ?? "").trim();
@@ -85,6 +99,9 @@ export async function computeSalesReports(): Promise<{
       const existing = itemMap.get(key) ?? { qty: 0, total: 0 };
       itemMap.set(key, { qty: existing.qty + qty, total: existing.total + amount });
     }
+    if (name && description) {
+      customerOrderLines.push({ customer: name, monthKey, dateKey, item: description, qty, amount });
+    }
   }
 
   const customerMonthly = [...customerMap.entries()]
@@ -102,5 +119,7 @@ export async function computeSalesReports(): Promise<{
     })
     .sort((a, b) => b.dateKey.localeCompare(a.dateKey) || b.total - a.total);
 
-  return { customerMonthly, itemMonthly };
+  customerOrderLines.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+
+  return { customerMonthly, itemMonthly, customerOrderLines };
 }
