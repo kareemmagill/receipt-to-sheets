@@ -18,7 +18,7 @@ interface UncertainFields {
   items: Map<number, Set<string>>;
 }
 
-// Entries look like "order_slip_date" or "items[1].rate", sometimes with a
+// Entries look like "order_slip_date" or "items[1].amount", sometimes with a
 // parenthetical explanation appended server-side (e.g. "items[0].item (no
 // confident code match — check manually)") -- the field path itself never
 // contains a space, so splitting on the first space strips that cleanly.
@@ -109,16 +109,12 @@ export default function VerificationForm({
       items: prev.items.map((item) => {
         if (item.id !== id) return item;
         const updated = { ...item, [field]: value };
-        // Rate = Amount / QTY. QTY and Amount are usually what's actually
-        // written on the slip; Rate is recalculated from them, but leave it
-        // alone if the user edits Rate directly — that edit wins until QTY
-        // or Amount changes again.
+        // Rate is never written on a chit — it's always Amount / QTY,
+        // recomputed here and shown read-only (see the Rate Field below).
         if (field === "qty" || field === "amount") {
           const qty = parseNumeric(updated.qty);
           const amount = parseNumeric(updated.amount);
-          if (qty !== null && qty !== 0 && amount !== null) {
-            updated.rate = formatAmount(amount / qty);
-          }
+          updated.rate = qty !== null && qty !== 0 && amount !== null ? formatAmount(amount / qty) : "";
         }
         // Invoice Class always mirrors Class.
         if (field === "class") {
@@ -316,12 +312,7 @@ export default function VerificationForm({
                 onChange={(v) => updateItem(item.id, "qty", v)}
                 uncertain={itemUncertain.has("qty")}
               />
-              <Field
-                label="Rate"
-                value={item.rate}
-                onChange={(v) => updateItem(item.id, "rate", v)}
-                uncertain={itemUncertain.has("rate")}
-              />
+              <Field label="Rate" value={item.rate} onChange={() => {}} readOnly />
               <Field
                 label="Amount"
                 value={item.amount}
@@ -336,12 +327,6 @@ export default function VerificationForm({
                 options={CLASS_OPTIONS}
                 onChange={(v) => updateItem(item.id, "class", v)}
                 uncertain={itemUncertain.has("class")}
-              />
-              <SelectField
-                label="Invoice Class"
-                value={item.invoice_class}
-                options={CLASS_OPTIONS}
-                onChange={(v) => updateItem(item.id, "invoice_class", v)}
               />
             </div>
           </div>
@@ -369,11 +354,13 @@ function Field({
   value,
   onChange,
   uncertain = false,
+  readOnly = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   uncertain?: boolean;
+  readOnly?: boolean;
 }) {
   return (
     <label
@@ -390,7 +377,12 @@ function Field({
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        style={{ ...inputStyle, ...(uncertain ? uncertainInputStyle : null) }}
+        readOnly={readOnly}
+        style={{
+          ...inputStyle,
+          ...(uncertain ? uncertainInputStyle : null),
+          ...(readOnly ? readOnlyInputStyle : null),
+        }}
       />
     </label>
   );
@@ -461,6 +453,12 @@ const selectStyle: React.CSSProperties = {
 const uncertainInputStyle: React.CSSProperties = {
   borderColor: "#b00020",
   borderWidth: 2,
+};
+
+const readOnlyInputStyle: React.CSSProperties = {
+  background: "#f4f4f4",
+  color: "#555",
+  cursor: "default",
 };
 
 const primaryButtonStyle: React.CSSProperties = {
