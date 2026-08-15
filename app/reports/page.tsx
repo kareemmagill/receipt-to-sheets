@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import type { ItemMonthlyTotal } from "@/lib/reports";
+import type { CustomerMonthlyTotal, ItemMonthlyTotal } from "@/lib/reports";
 
 function formatMonth(monthKey: string): string {
   if (monthKey === "Unknown") return "Unknown / unparsed date";
@@ -24,6 +24,7 @@ export default function ReportsPage() {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
   const [itemMonthly, setItemMonthly] = useState<ItemMonthlyTotal[]>([]);
+  const [customerMonthly, setCustomerMonthly] = useState<CustomerMonthlyTotal[]>([]);
   const [monthFilter, setMonthFilter] = useState("");
   const [search, setSearch] = useState("");
 
@@ -37,6 +38,7 @@ export default function ReportsPage() {
           return;
         }
         setItemMonthly(data.itemMonthly);
+        setCustomerMonthly(data.customerMonthly);
         setStatus("ready");
       })
       .catch((err) => {
@@ -58,7 +60,21 @@ export default function ReportsPage() {
       (!searchLower || r.item.toLowerCase().includes(searchLower))
   );
 
-  const totalSales = filteredItems.reduce((sum, r) => sum + r.total, 0);
+  // A search matching a customer takes priority for the headline figure --
+  // "how much did X spend" is the more specific question when it applies.
+  // No dedicated customer table (Kareem, 2026-08-15): just the search and
+  // this total, not a full breakdown.
+  const matchingCustomers = searchLower
+    ? customerMonthly.filter(
+        (r) => (!monthFilter || r.monthKey === monthFilter) && r.customer.toLowerCase().includes(searchLower)
+      )
+    : [];
+  const matchedCustomerNames = [...new Set(matchingCustomers.map((r) => r.customer))];
+
+  const totalSales =
+    matchingCustomers.length > 0
+      ? matchingCustomers.reduce((sum, r) => sum + r.total, 0)
+      : filteredItems.reduce((sum, r) => sum + r.total, 0);
 
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: "24px 16px", display: "flex", flexDirection: "column", gap: 20 }}>
@@ -87,7 +103,11 @@ export default function ReportsPage() {
             <span style={{ fontSize: 12, color: "#777" }}>
               Total Sales
               {monthFilter ? ` — ${formatMonth(monthFilter)}` : ""}
-              {search.trim() ? ` matching "${search.trim()}"` : ""}
+              {matchedCustomerNames.length > 0
+                ? ` for ${matchedCustomerNames.length === 1 ? matchedCustomerNames[0] : `${matchedCustomerNames.length} matching customers`}`
+                : search.trim()
+                  ? ` matching "${search.trim()}"`
+                  : ""}
             </span>
             <span style={{ fontSize: 28, fontWeight: 700 }}>{formatMoney(totalSales)}</span>
           </section>
@@ -104,7 +124,7 @@ export default function ReportsPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search item…"
+              placeholder="Search customer or item…"
               style={inputStyle}
             />
           </div>
