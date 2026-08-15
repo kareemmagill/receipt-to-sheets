@@ -100,8 +100,16 @@ export default function VerificationForm({
   saving?: boolean;
 }) {
   const [order, setOrder] = useState<EditableOrder>(() => toEditable(extraction));
+  // Non-members aren't on the member list, so their (pre-filled, OCR'd)
+  // name always starts as free text rather than a dropdown "selection".
   const [customerMode, setCustomerMode] = useState<"select" | "manual">(
-    order.customer_suggested ? "select" : order.customer_written ? "select" : "manual"
+    order.member_status === "Non-Member"
+      ? "manual"
+      : order.customer_suggested
+        ? "select"
+        : order.customer_written
+          ? "select"
+          : "manual"
   );
   const [customerError, setCustomerError] = useState<string | null>(null);
 

@@ -210,7 +210,14 @@ export async function POST(req: Request) {
       const names = customerRows.map((row) => row[0]).filter((name): name is string => Boolean(name?.trim()));
       extraction.customer_list = names;
 
-      if (extraction.customer_written) {
+      // Non-members aren't in the Customers tab by definition -- matching
+      // their handwritten name against it would just suggest an unrelated
+      // member who happens to sound similar. Use the OCR reading as-is
+      // instead, pre-filled for manual editing (see VerificationForm.tsx's
+      // customerMode default).
+      if (memberStatus === "Non-Member") {
+        extraction.customer_suggested = extraction.customer_written;
+      } else if (extraction.customer_written) {
         const matches = matchCustomer(extraction.customer_written, names);
         extraction.customer_matches = matches;
         extraction.customer_suggested =
