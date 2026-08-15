@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import type { CustomerMonthlyTotal, ItemMonthlyTotal } from "@/lib/reports";
+import type { ItemMonthlyTotal } from "@/lib/reports";
 
 function formatMonth(monthKey: string): string {
   if (monthKey === "Unknown") return "Unknown / unparsed date";
@@ -17,7 +17,6 @@ function formatMoney(n: number): string {
 export default function ReportsPage() {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
-  const [customerMonthly, setCustomerMonthly] = useState<CustomerMonthlyTotal[]>([]);
   const [itemMonthly, setItemMonthly] = useState<ItemMonthlyTotal[]>([]);
   const [monthFilter, setMonthFilter] = useState("");
   const [search, setSearch] = useState("");
@@ -31,7 +30,6 @@ export default function ReportsPage() {
           setStatus("error");
           return;
         }
-        setCustomerMonthly(data.customerMonthly);
         setItemMonthly(data.itemMonthly);
         setStatus("ready");
       })
@@ -42,22 +40,19 @@ export default function ReportsPage() {
   }, []);
 
   const months = useMemo(() => {
-    const set = new Set([...customerMonthly.map((r) => r.monthKey), ...itemMonthly.map((r) => r.monthKey)]);
+    const set = new Set(itemMonthly.map((r) => r.monthKey));
     return [...set].sort().reverse();
-  }, [customerMonthly, itemMonthly]);
+  }, [itemMonthly]);
 
   const searchLower = search.trim().toLowerCase();
 
-  const filteredCustomers = customerMonthly.filter(
-    (r) =>
-      (!monthFilter || r.monthKey === monthFilter) &&
-      (!searchLower || r.customer.toLowerCase().includes(searchLower))
-  );
   const filteredItems = itemMonthly.filter(
     (r) =>
       (!monthFilter || r.monthKey === monthFilter) &&
       (!searchLower || r.item.toLowerCase().includes(searchLower))
   );
+
+  const totalSales = filteredItems.reduce((sum, r) => sum + r.total, 0);
 
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: "24px 16px", display: "flex", flexDirection: "column", gap: 20 }}>
@@ -73,6 +68,24 @@ export default function ReportsPage() {
 
       {status === "ready" && (
         <>
+          <section
+            style={{
+              background: "#f4f4f4",
+              borderRadius: 8,
+              padding: "14px 16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 2,
+            }}
+          >
+            <span style={{ fontSize: 12, color: "#777" }}>
+              Total Sales
+              {monthFilter ? ` — ${formatMonth(monthFilter)}` : ""}
+              {search.trim() ? ` matching "${search.trim()}"` : ""}
+            </span>
+            <span style={{ fontSize: 28, fontWeight: 700 }}>{formatMoney(totalSales)}</span>
+          </section>
+
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} style={selectStyle}>
               <option value="">All months</option>
@@ -85,41 +98,10 @@ export default function ReportsPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search customer or item…"
+              placeholder="Search item…"
               style={inputStyle}
             />
           </div>
-
-          <section>
-            <h2 style={{ fontSize: 16, marginBottom: 8 }}>Sales by Customer, by Month</h2>
-            <div style={{ overflowX: "auto" }}>
-              <table style={tableStyle}>
-                <thead>
-                  <tr>
-                    <th style={thStyle}>Month</th>
-                    <th style={thStyle}>Customer</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredCustomers.map((r) => (
-                    <tr key={`${r.monthKey}|${r.customer}`}>
-                      <td style={tdStyle}>{formatMonth(r.monthKey)}</td>
-                      <td style={tdStyle}>{r.customer}</td>
-                      <td style={{ ...tdStyle, textAlign: "right" }}>{formatMoney(r.total)}</td>
-                    </tr>
-                  ))}
-                  {filteredCustomers.length === 0 && (
-                    <tr>
-                      <td style={tdStyle} colSpan={3}>
-                        No data.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
 
           <section>
             <h2 style={{ fontSize: 16, marginBottom: 8 }}>Sales by Menu Item, by Month</h2>
