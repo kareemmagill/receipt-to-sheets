@@ -4,6 +4,7 @@ import { buildSalesOrderRows } from "@/lib/salesOrderRows";
 import { getNextArNumber } from "@/lib/arNumber";
 import { checkDuplicateSlip } from "@/lib/duplicateCheck";
 import { uploadOrderPhoto } from "@/lib/googleDrive";
+import { deleteOrderByArNumber } from "@/lib/deleteOrderByAr";
 import type { EditableOrder } from "@/components/VerificationForm";
 
 const PHOTO_LOG_TAB = "Photo Log";
@@ -31,6 +32,12 @@ export async function POST(req: Request) {
     const order: EditableOrder | undefined = body?.order;
     const force: boolean = body?.force === true;
     const imageDataUrl: string | undefined = body?.imageDataUrl;
+    // Set when re-saving an edit of an order this app already saved (the
+    // post-save summary screen's "Edit" option) -- the old rows are deleted
+    // after the edited version saves successfully (see below). Implies
+    // force: this is a known, intentional replacement of a specific order,
+    // not an accidental re-scan duplicateCheck should be second-guessing.
+    const replaceArNumber: string | undefined = body?.replaceArNumber;
 
     if (!order) {
       return NextResponse.json({ ok: false, error: "Missing order" }, { status: 400 });
@@ -42,7 +49,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Missing customer" }, { status: 400 });
     }
 
-    if (!force) {
+    if (!force && !replaceArNumber) {
       const duplicate = await checkDuplicateSlip(order);
       if (duplicate.status === "exact") {
         return NextResponse.json(
@@ -68,11 +75,13 @@ export async function POST(req: Request) {
     // it fails, the sales order write above has already succeeded, so we
     // report a soft warning instead of failing the whole save.
     let photoWarning: string | undefined;
+    let photoLink: string | undefined;
     if (imageDataUrl) {
       try {
         const customerName = order.customer_suggested || order.customer_written;
         const fileName = buildPhotoFileName(order, arNumber);
         const { webViewLink } = await uploadOrderPhoto({ imageDataUrl, fileName });
+        photoLink = webViewLink;
 
         await ensureTabExists(PHOTO_LOG_TAB, PHOTO_LOG_HEADER);
         await appendRows(PHOTO_LOG_TAB, [
@@ -83,7 +92,28 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ ok: true, rowsAdded: rows.length, arNumber, photoWarning });
+    // Only after the edited version is safely saved -- if this delete
+    // failed instead, the old order would vanish with no replacement.
+    // Worst case here is a leftover duplicate (the old rows), which is
+    // recoverable; that's why this runs last, and best-effort like the
+    // photo archive above.
+    let replaceWarning: string | undefined;
+    if (replaceArNumber) {
+      try {
+        await deleteOrderByArNumber(replaceArNumber);
+      } catch (err) {
+        replaceWarning = err instanceof Error ? err.message : String(err);
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      rowsAdded: rows.length,
+      arNumber,
+      photoWarning,
+      photoLink,
+      replaceWarning,
+    });
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : String(err) },

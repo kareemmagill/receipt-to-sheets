@@ -23,9 +23,15 @@ export default function Home() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [conflictDifferences, setConflictDifferences] = useState<string[]>([]);
   const [pendingOrder, setPendingOrder] = useState<EditableOrder | null>(null);
-  const [rowsAdded, setRowsAdded] = useState(0);
+  const [savedOrder, setSavedOrder] = useState<EditableOrder | null>(null);
   const [savedArNumber, setSavedArNumber] = useState("");
+  const [savedPhotoLink, setSavedPhotoLink] = useState<string | null>(null);
   const [photoWarning, setPhotoWarning] = useState<string | null>(null);
+  // Non-null while re-opening the form to edit an order that was already
+  // saved (rather than a fresh scan) -- see handleEditSaved.
+  const [editingArNumber, setEditingArNumber] = useState<string | null>(null);
+  const [deleteStatus, setDeleteStatus] = useState<"idle" | "deleting" | "deleted" | "error">("idle");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     loadLastPhoto()
@@ -103,8 +109,49 @@ export default function Home() {
     setSaveError(null);
     setConflictDifferences([]);
     setPendingOrder(null);
+    setSavedOrder(null);
+    setSavedPhotoLink(null);
     setPhotoWarning(null);
+    setEditingArNumber(null);
+    setDeleteStatus("idle");
+    setDeleteError(null);
     setImageDataUrl(null);
+  }
+
+  function handleEditSaved() {
+    if (!savedOrder) return;
+    setEditingArNumber(savedArNumber);
+    setSaveStatus("idle");
+  }
+
+  function handleCancelEdit() {
+    setEditingArNumber(null);
+    setSaveStatus("success");
+  }
+
+  async function handleDeleteSaved() {
+    if (!savedArNumber) return;
+    if (!confirm("Delete this saved order? This can't be undone.")) return;
+
+    setDeleteStatus("deleting");
+    setDeleteError(null);
+    try {
+      const res = await fetch("/api/delete-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ arNumber: savedArNumber }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        setDeleteError(data.error ?? "Unknown error");
+        setDeleteStatus("error");
+        return;
+      }
+      setDeleteStatus("deleted");
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : String(err));
+      setDeleteStatus("error");
+    }
   }
 
   async function handleConfirm(order: EditableOrder, force = false) {
@@ -117,7 +164,15 @@ export default function Home() {
       const res = await fetch("/api/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order, force, imageDataUrl }),
+        body: JSON.stringify({
+          order,
+          force,
+          // Re-saving an already-archived photo would just duplicate it in
+          // Drive for no benefit -- the physical chit hasn't changed, only
+          // the extracted data has.
+          imageDataUrl: editingArNumber ? undefined : imageDataUrl,
+          replaceArNumber: editingArNumber ?? undefined,
+        }),
       });
       const data = await res.json();
 
@@ -138,9 +193,12 @@ export default function Home() {
         return;
       }
 
-      setRowsAdded(data.rowsAdded);
+      setSavedOrder(order);
       setSavedArNumber(data.arNumber);
-      setPhotoWarning(data.photoWarning ?? null);
+      setSavedPhotoLink(data.photoLink ?? (editingArNumber ? savedPhotoLink : null));
+      setPhotoWarning(data.photoWarning ?? data.replaceWarning ?? null);
+      setEditingArNumber(null);
+      setDeleteStatus("idle");
       setSaveStatus("success");
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err));
@@ -252,8 +310,11 @@ export default function Home() {
           <VerificationForm
             extraction={extraction}
             itemTemplate={itemTemplate}
+            initialOrder={editingArNumber ? (savedOrder ?? undefined) : undefined}
             onConfirm={(order) => handleConfirm(order)}
-            onRetake={handleRetake}
+            onRetake={editingArNumber ? handleCancelEdit : handleRetake}
+            onRetakeLabel={editingArNumber ? "Cancel" : "Retake Photo"}
+            confirmLabel={editingArNumber ? "Save Changes" : "Confirm & Save"}
             saving={saveStatus === "saving"}
           />
         </>
@@ -268,20 +329,119 @@ export default function Home() {
         </div>
       )}
 
-      {saveStatus === "success" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <p style={{ color: "#0a7a2f" }}>
-            Saved {rowsAdded} row{rowsAdded === 1 ? "" : "s"} to Sales Orders as {savedArNumber}.
-          </p>
-          {photoWarning && (
-            <p style={{ color: "#8a6d00", fontSize: 12 }}>Photo not archived: {photoWarning}</p>
+      {saveStatus === "success" && savedOrder && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div>
+            <p style={{ fontSize: 15 }}>
+              Saved Chit{" "}
+              <strong style={{ color: "#0a7a2f", fontSize: 18 }}>
+                #{savedOrder.order_slip_number || "?"}
+              </strong>
+            </p>
+            {savedPhotoLink && (
+              <a href={savedPhotoLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13 }}>
+                View photo of chit
+              </a>
+            )}
+          </div>
+
+          {photoWarning && <p style={{ color: "#8a6d00", fontSize: 12 }}>{photoWarning}</p>}
+
+          {deleteStatus === "deleted" ? (
+            <>
+              <p style={{ color: "#555" }}>Deleted.</p>
+              <button onClick={handleRetake} style={buttonStyle}>
+                Scan Another Slip
+              </button>
+            </>
+          ) : (
+            <>
+              <OrderSummary order={savedOrder} />
+
+              {deleteError && <p style={{ color: "#b00020", fontSize: 13 }}>Delete failed: {deleteError}</p>}
+
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button onClick={handleEditSaved} style={secondaryButtonStyle}>
+                  Edit
+                </button>
+                <button
+                  onClick={handleDeleteSaved}
+                  disabled={deleteStatus === "deleting"}
+                  style={dangerButtonStyle}
+                >
+                  {deleteStatus === "deleting" ? "Deleting…" : "Delete"}
+                </button>
+                <button onClick={handleRetake} style={{ ...buttonStyle, flex: 1 }}>
+                  Scan Another Slip
+                </button>
+              </div>
+            </>
           )}
-          <button onClick={handleRetake} style={buttonStyle}>
-            Scan Another Slip
-          </button>
         </div>
       )}
     </main>
+  );
+}
+
+function sumAmounts(items: EditableOrder["items"]): number {
+  return items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+}
+
+function formatMoney(n: number): string {
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function OrderSummary({ order }: { order: EditableOrder }) {
+  const slipTypeLabel =
+    order.slip_type === "Bar" ? "Order Slip (Bar)" : order.slip_type === "Restaurant" ? "Food Order Slip" : "—";
+  const paymentLabel = order.terms === "COD" ? "Paid" : order.terms === "CREDIT" ? "Not Paid" : "—";
+
+  return (
+    <div
+      style={{
+        border: "1px solid #ccc",
+        borderRadius: 8,
+        padding: 14,
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+        fontSize: 14,
+      }}
+    >
+      <SummaryRow label="Slip Type" value={slipTypeLabel} />
+      <SummaryRow label="Customer" value={order.customer_suggested || order.customer_written || "—"} />
+      <SummaryRow label="Member Status" value={order.member_status || "—"} />
+      <SummaryRow label="Waitress" value={order.waitress || "—"} />
+      <SummaryRow label="Date" value={order.order_slip_date || "—"} />
+      {order.memo && <SummaryRow label="Memo" value={order.memo} />}
+
+      <div style={{ borderTop: "1px solid #eee", marginTop: 4, paddingTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+        {order.items.map((item) => (
+          <div key={item.id} style={{ display: "flex", gap: 8, fontSize: 13 }}>
+            <span style={{ width: 24, flexShrink: 0, color: "#777" }}>{item.qty}x</span>
+            <span style={{ flex: 1 }}>{item.description}</span>
+            <span style={{ width: 60, flexShrink: 0, color: "#777" }}>{item.item}</span>
+            <span style={{ width: 60, flexShrink: 0, textAlign: "right" }}>{item.amount}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ borderTop: "1px solid #eee", paddingTop: 8, display: "flex", justifyContent: "space-between", fontWeight: 600 }}>
+        <span>Total</span>
+        <span>{formatMoney(sumAmounts(order.items))}</span>
+      </div>
+
+      <SummaryRow label="Payment" value={paymentLabel} />
+    </div>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+      <span style={{ color: "#777" }}>{label}</span>
+      <span style={{ textAlign: "right" }}>{value}</span>
+    </div>
   );
 }
 
@@ -292,5 +452,25 @@ const buttonStyle: React.CSSProperties = {
   border: "1px solid #333",
   background: "#171717",
   color: "#fff",
+  cursor: "pointer",
+};
+
+const secondaryButtonStyle: React.CSSProperties = {
+  padding: "14px 20px",
+  fontSize: 16,
+  borderRadius: 8,
+  border: "1px solid #999",
+  background: "#fff",
+  color: "#333",
+  cursor: "pointer",
+};
+
+const dangerButtonStyle: React.CSSProperties = {
+  padding: "14px 20px",
+  fontSize: 16,
+  borderRadius: 8,
+  border: "1px solid #b00020",
+  background: "#fff",
+  color: "#b00020",
   cursor: "pointer",
 };

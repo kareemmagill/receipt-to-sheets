@@ -92,17 +92,29 @@ function emptyItem(): EditableItem {
 export default function VerificationForm({
   extraction,
   itemTemplate,
+  initialOrder,
   onConfirm,
   onRetake,
+  onRetakeLabel = "Retake Photo",
+  confirmLabel = "Confirm & Save",
   saving = false,
 }: {
   extraction: OrderSlipExtraction;
   itemTemplate: ItemCodeEntry[];
+  // Overrides toEditable(extraction) as the starting field values -- used
+  // to re-open the form pre-filled with an order that was already edited
+  // and saved (see the post-save "Edit" flow in app/page.tsx), rather than
+  // reverting to the original, possibly-since-corrected vision extraction.
+  // extraction is still used for its customer_matches/customer_list and
+  // uncertain_fields highlighting either way.
+  initialOrder?: EditableOrder;
   onConfirm: (order: EditableOrder) => void;
   onRetake: () => void;
+  onRetakeLabel?: string;
+  confirmLabel?: string;
   saving?: boolean;
 }) {
-  const [order, setOrder] = useState<EditableOrder>(() => toEditable(extraction));
+  const [order, setOrder] = useState<EditableOrder>(() => initialOrder ?? toEditable(extraction));
   // Non-members aren't on the member list, so their (pre-filled, OCR'd)
   // name always starts as free text rather than a dropdown "selection".
   const [customerMode, setCustomerMode] = useState<"select" | "manual">(
@@ -425,10 +437,10 @@ export default function VerificationForm({
 
       <div style={{ display: "flex", gap: 12 }}>
         <button onClick={onRetake} disabled={saving} style={secondaryButtonStyle}>
-          Retake Photo
+          {onRetakeLabel}
         </button>
         <button onClick={handleConfirmClick} disabled={saving} style={{ ...primaryButtonStyle, flex: 1 }}>
-          {saving ? "Saving…" : "Confirm & Save"}
+          {saving ? "Saving…" : confirmLabel}
         </button>
       </div>
     </div>
