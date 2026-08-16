@@ -21,13 +21,35 @@ function asLiteralText(value: string): string {
   return `'${value}`;
 }
 
+// Slips get read as whatever punctuation/year-length the model saw on the
+// paper -- "8/15/26", "08-15-2026", "8.15.26" -- which reads fine by eye
+// but is inconsistent across rows. Standardizes to the club's documented
+// month-first convention (see /api/query's system prompt), no leading
+// zeros, always a 4-digit year: "8/15/2026". Only touches strings matching
+// a confident numeric D-separator-D-separator-Y pattern -- anything else
+// (a month name, something genuinely unreadable) passes through unchanged
+// rather than risk silently writing a wrong date into the permanent
+// record.
+function normalizeDate(value: string): string {
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2}|\d{4})$/);
+  if (!match) return trimmed;
+
+  const month = parseInt(match[1], 10);
+  const day = parseInt(match[2], 10);
+  const year = match[3].length === 2 ? 2000 + parseInt(match[3], 10) : parseInt(match[3], 10);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return trimmed;
+
+  return `${month}/${day}/${year}`;
+}
+
 export function buildSalesOrderRows(order: EditableOrder, arNumber: string): (string | number)[][] {
   const customerName = order.customer_suggested || order.customer_written;
 
   return order.items.map((item) => [
     customerName,
     item.class,
-    asLiteralText(order.order_slip_date),
+    asLiteralText(normalizeDate(order.order_slip_date)),
     asLiteralText(order.order_slip_number),
     arNumber,
     order.terms,
