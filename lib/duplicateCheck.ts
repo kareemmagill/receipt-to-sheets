@@ -8,10 +8,14 @@ export interface ExistingOrderItem {
 }
 
 export interface ExistingOrderSummary {
-  // Blank for legacy rows that predate this app's AR numbering -- callers
-  // must not offer an in-place "update" for those, since there's no
-  // reliable way to target them for replacement (see
-  // lib/deleteOrderByAr.ts, which matches by AR number).
+  // The app's identity key for update/delete/photo-lookup (see
+  // lib/deleteOrderBySlip.ts) -- always populated here, since this summary
+  // only ever exists as the result of a slip-number match. Works for
+  // legacy rows that predate this app too, unlike AR number.
+  slipNumber: string;
+  // Informational only now -- shown in the duplicate message so a human
+  // can cross-reference it, but blank for legacy rows that predate this
+  // app's AR numbering and no longer anything callers key off of.
   arNumber: string;
   customer: string;
   date: string;
@@ -55,6 +59,7 @@ export function checkDuplicateSlip(order: EditableOrder, rows: string[][]): Dupl
   if (existingRows.length === 0) return { status: "none" };
 
   const existing: ExistingOrderSummary = {
+    slipNumber,
     arNumber: (existingRows[0][AR_COL] ?? "").trim(),
     customer: (existingRows[0][NAME_COL] ?? "").trim(),
     date: (existingRows[0][DATE_COL] ?? "").trim(),

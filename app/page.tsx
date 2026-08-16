@@ -34,12 +34,14 @@ export default function Home() {
   // instead of the normal verification form.
   const [existingOrder, setExistingOrder] = useState<ExistingOrderSummary | null>(null);
   const [savedOrder, setSavedOrder] = useState<EditableOrder | null>(null);
-  const [savedArNumber, setSavedArNumber] = useState("");
   const [savedPhotoLink, setSavedPhotoLink] = useState<string | null>(null);
   const [photoWarning, setPhotoWarning] = useState<string | null>(null);
   // Non-null while re-opening the form to edit an order that was already
-  // saved (rather than a fresh scan) -- see handleEditSaved.
-  const [editingArNumber, setEditingArNumber] = useState<string | null>(null);
+  // saved (rather than a fresh scan) -- see handleEditSaved. Holds the
+  // slip number, not AR number -- the chit's own printed number is always
+  // unique (Kareem, 2026-08-16) and, unlike AR number, present even on
+  // legacy rows that predate this app.
+  const [editingSlipNumber, setEditingSlipNumber] = useState<string | null>(null);
   const [deleteStatus, setDeleteStatus] = useState<"idle" | "deleting" | "deleted" | "error">("idle");
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -122,7 +124,7 @@ export default function Home() {
     setSavedOrder(null);
     setSavedPhotoLink(null);
     setPhotoWarning(null);
-    setEditingArNumber(null);
+    setEditingSlipNumber(null);
     setDeleteStatus("idle");
     setDeleteError(null);
     setImageDataUrl(null);
@@ -130,17 +132,17 @@ export default function Home() {
 
   function handleEditSaved() {
     if (!savedOrder) return;
-    setEditingArNumber(savedArNumber);
+    setEditingSlipNumber(savedOrder.order_slip_number);
     setSaveStatus("idle");
   }
 
   function handleCancelEdit() {
-    setEditingArNumber(null);
+    setEditingSlipNumber(null);
     setSaveStatus("success");
   }
 
   async function handleDeleteSaved() {
-    if (!savedArNumber) return;
+    if (!savedOrder?.order_slip_number) return;
     if (!confirm("Delete this saved order? This can't be undone.")) return;
 
     setDeleteStatus("deleting");
@@ -149,7 +151,7 @@ export default function Home() {
       const res = await fetch("/api/delete-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ arNumber: savedArNumber }),
+        body: JSON.stringify({ slipNumber: savedOrder.order_slip_number }),
       });
       const data = await res.json();
       if (!data.ok) {
@@ -164,12 +166,12 @@ export default function Home() {
     }
   }
 
-  // replaceArNumberOverride is used by "Update Record" (see
+  // replaceSlipNumberOverride is used by "Update Record" (see
   // handleUpdateExisting) when the scanned slip number already exists but
-  // wasn't from this app's own post-save "Edit" flow (editingArNumber).
+  // wasn't from this app's own post-save "Edit" flow (editingSlipNumber).
   // Both mean the same thing to /api/save: replace that specific order.
-  async function handleConfirm(order: EditableOrder, replaceArNumberOverride?: string) {
-    const replaceArNumber = replaceArNumberOverride ?? editingArNumber ?? undefined;
+  async function handleConfirm(order: EditableOrder, replaceSlipNumberOverride?: string) {
+    const replaceSlipNumber = replaceSlipNumberOverride ?? editingSlipNumber ?? undefined;
 
     setSaveStatus("saving");
     setSaveError(null);
@@ -180,7 +182,7 @@ export default function Home() {
       // Drive for no benefit -- the physical chit hasn't changed, only the
       // extracted data has.
       const archivalImage =
-        !replaceArNumber && imageDataUrl ? await resizeImage(imageDataUrl, ARCHIVAL_MAX_DIMENSION) : undefined;
+        !replaceSlipNumber && imageDataUrl ? await resizeImage(imageDataUrl, ARCHIVAL_MAX_DIMENSION) : undefined;
 
       const res = await fetch("/api/save", {
         method: "POST",
@@ -188,7 +190,7 @@ export default function Home() {
         body: JSON.stringify({
           order,
           imageDataUrl: archivalImage,
-          replaceArNumber,
+          replaceSlipNumber,
         }),
       });
       const data = await res.json();
@@ -206,10 +208,9 @@ export default function Home() {
       }
 
       setSavedOrder(order);
-      setSavedArNumber(data.arNumber);
-      setSavedPhotoLink(data.photoLink ?? (replaceArNumber ? savedPhotoLink : null));
+      setSavedPhotoLink(data.photoLink ?? (replaceSlipNumber ? savedPhotoLink : null));
       setPhotoWarning(data.photoWarning ?? data.replaceWarning ?? null);
-      setEditingArNumber(null);
+      setEditingSlipNumber(null);
       setExistingOrder(null);
       setDeleteStatus("idle");
       setSaveStatus("success");
@@ -220,8 +221,8 @@ export default function Home() {
   }
 
   function handleUpdateExisting() {
-    if (!pendingOrder || !existingOrder?.arNumber) return;
-    handleConfirm(pendingOrder, existingOrder.arNumber);
+    if (!pendingOrder || !existingOrder?.slipNumber) return;
+    handleConfirm(pendingOrder, existingOrder.slipNumber);
   }
 
   return (
@@ -313,12 +314,12 @@ export default function Home() {
           <VerificationForm
             extraction={extraction}
             itemTemplate={itemTemplate}
-            initialOrder={editingArNumber ? (savedOrder ?? undefined) : undefined}
+            initialOrder={editingSlipNumber ? (savedOrder ?? undefined) : undefined}
             photoDataUrl={imageDataUrl ?? undefined}
             onConfirm={(order) => handleConfirm(order)}
-            onRetake={editingArNumber ? handleCancelEdit : handleRetake}
-            onRetakeLabel={editingArNumber ? "Cancel" : "Retake Photo"}
-            confirmLabel={editingArNumber ? "Save Changes" : "Confirm & Save"}
+            onRetake={editingSlipNumber ? handleCancelEdit : handleRetake}
+            onRetakeLabel={editingSlipNumber ? "Cancel" : "Retake Photo"}
+            confirmLabel={editingSlipNumber ? "Save Changes" : "Confirm & Save"}
             saving={saveStatus === "saving"}
           />
         </>
@@ -329,7 +330,7 @@ export default function Home() {
           <p style={{ color: "#8a6d00" }}>{saveError}</p>
           <ExistingOrderRecap order={existingOrder} />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {existingOrder.arNumber && (
+            {existingOrder.slipNumber && (
               <button
                 onClick={handleUpdateExisting}
                 disabled={saveStatus === "saving"}

@@ -4,7 +4,7 @@ import { buildSalesOrderRows, mostRecentOrderDate } from "@/lib/salesOrderRows";
 import { nextArNumberFromRows } from "@/lib/arNumber";
 import { checkDuplicateSlip } from "@/lib/duplicateCheck";
 import { uploadOrderPhoto } from "@/lib/googleDrive";
-import { deleteOrderByArNumber } from "@/lib/deleteOrderByAr";
+import { deleteOrderBySlipNumber } from "@/lib/deleteOrderBySlip";
 import type { EditableOrder } from "@/components/VerificationForm";
 
 const PHOTO_LOG_TAB = "Photo Log";
@@ -37,7 +37,10 @@ export async function POST(req: Request) {
     // exists (see below). Skips duplicateCheck -- this is a known,
     // intentional replacement, not an accidental re-scan to second-guess.
     // The old rows are deleted only after the new ones save successfully.
-    const replaceArNumber: string | undefined = body?.replaceArNumber;
+    // Slip number, not AR number, identifies which existing order this
+    // replaces -- the chit's own printed number is always unique (Kareem,
+    // 2026-08-16) and, unlike AR number, present even on legacy rows.
+    const replaceSlipNumber: string | undefined = body?.replaceSlipNumber;
 
     if (!order) {
       return NextResponse.json({ ok: false, error: "Missing order" }, { status: 400 });
@@ -55,7 +58,7 @@ export async function POST(req: Request) {
     // one of several redundant reads that made a save feel slow.
     const salesOrderRows = await readTab("Sales Orders");
 
-    if (!replaceArNumber) {
+    if (!replaceSlipNumber) {
       const duplicate = checkDuplicateSlip(order, salesOrderRows);
       if (duplicate.status === "exact" || duplicate.status === "conflict") {
         return NextResponse.json(
@@ -127,9 +130,9 @@ export async function POST(req: Request) {
     // recoverable; that's why this runs last, and best-effort like the
     // photo archive above.
     let replaceWarning: string | undefined;
-    if (replaceArNumber) {
+    if (replaceSlipNumber) {
       try {
-        await deleteOrderByArNumber(replaceArNumber);
+        await deleteOrderBySlipNumber(replaceSlipNumber);
       } catch (err) {
         replaceWarning = err instanceof Error ? err.message : String(err);
       }

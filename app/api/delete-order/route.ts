@@ -1,18 +1,18 @@
 import { NextResponse } from "next/server";
-import { deleteOrderByArNumber } from "@/lib/deleteOrderByAr";
+import { deleteOrderBySlipNumber } from "@/lib/deleteOrderBySlip";
 
 // Used by the "Delete" option on the post-save summary screen -- deletes
-// exactly the order just saved (by its AR number), not a positional
-// heuristic. See lib/deleteOrderByAr.ts.
+// exactly the order just saved (by its slip number), not a positional
+// heuristic. See lib/deleteOrderBySlip.ts.
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const arNumber: string | undefined = body?.arNumber;
-    if (!arNumber) {
-      return NextResponse.json({ ok: false, error: "Missing arNumber" }, { status: 400 });
+    const slipNumber: string | undefined = body?.slipNumber;
+    if (!slipNumber) {
+      return NextResponse.json({ ok: false, error: "Missing slipNumber" }, { status: 400 });
     }
 
-    const { deleted } = await deleteOrderByArNumber(arNumber);
+    const { deleted } = await deleteOrderBySlipNumber(slipNumber);
     return NextResponse.json({ ok: true, deleted });
   } catch (err) {
     return NextResponse.json(

@@ -13,7 +13,7 @@ const DESC_COL = 11;
 const AMOUNT_COL = 13;
 
 // Photo Log columns -- see PHOTO_LOG_HEADER in app/api/save/route.ts.
-const LOG_AR_COL = 0;
+const LOG_SLIP_COL = 1;
 const LOG_PHOTO_LINK_COL = 4;
 
 // Most recent records first, and capped -- this reads the live sheet on
@@ -85,14 +85,14 @@ export async function GET(req: Request) {
     // just means "no photos archived yet," not an error worth failing on.
     try {
       const logRows = await readTab("Photo Log");
-      const photoByArNumber = new Map<string, string>();
+      const photoBySlipNumber = new Map<string, string>();
       for (const row of logRows.slice(1)) {
-        const arNumber = (row[LOG_AR_COL] ?? "").trim();
+        const slipNumber = (row[LOG_SLIP_COL] ?? "").trim();
         const link = (row[LOG_PHOTO_LINK_COL] ?? "").trim();
-        if (arNumber && link) photoByArNumber.set(arNumber, link);
+        if (slipNumber && link) photoBySlipNumber.set(slipNumber, link);
       }
       for (const record of records) {
-        if (record.arNumber) record.photoLink = photoByArNumber.get(record.arNumber) ?? null;
+        if (record.slipNumber) record.photoLink = photoBySlipNumber.get(record.slipNumber) ?? null;
       }
     } catch {
       // No Photo Log tab yet -- leave every record's photoLink as null.
