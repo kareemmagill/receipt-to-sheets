@@ -19,11 +19,21 @@ const WALK_IN_FALLBACK_NAME = "DIRECT SALES- WALK IN";
  * corrections list) share one fetch instead of each re-reading the same
  * tab.
  */
+// A person's name is never purely numeric -- guards against exactly what
+// happened 2026-08-17, where a data-alignment bug (now fixed, see
+// lib/googleSheets.ts's appendRows) put the Rate column's value in the
+// Waitress column, and those numbers started showing up as name
+// suggestions. Cheap, durable insurance against any future bad value
+// landing in this column, not just that specific bug.
+function looksLikeARealName(value: string): boolean {
+  return /[A-Za-z]/.test(value);
+}
+
 export function waitressNamesFromRows(rows: string[][]): string[] {
   const names = new Set<string>();
   for (const row of rows.slice(1)) {
     const name = (row[WAITRESS_COL] ?? "").trim();
-    if (name) names.add(name);
+    if (name && looksLikeARealName(name)) names.add(name);
   }
   return [...names];
 }
