@@ -328,14 +328,8 @@ export default function Home() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1 style={{ fontSize: 20 }}>PGYC Order Slip Scanner</h1>
         <div style={{ display: "flex", gap: 12, fontSize: 13 }}>
-          <Link href="/reports" style={{ color: "#555" }}>
-            Reports
-          </Link>
           <Link href="/daily-report" style={{ color: "#555" }}>
             Daily Report
-          </Link>
-          <Link href="/batch" style={{ color: "#555" }}>
-            Batch Import
           </Link>
           <Link href="/development" style={{ color: "#555" }}>
             Development
