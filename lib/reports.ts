@@ -1,4 +1,5 @@
 import { readTab } from "./googleSheets";
+import { parseCalendarDate } from "./dateNormalize";
 
 export interface CustomerMonthlyTotal {
   customer: string;
@@ -32,6 +33,7 @@ export interface CustomerOrderLine {
 const NAME_COL = 0;
 const DATE_COL = 2;
 const QTY_COL = 8;
+const ITEM_COL = 10;
 const DESCRIPTION_COL = 11;
 const AMOUNT_COL = 13;
 
@@ -40,27 +42,14 @@ function parseAmount(raw: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function parseOrderDate(raw: string): { year: number; month: number; day: number } | null {
-  const match = raw.trim().match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
-  if (!match) return null;
-
-  const month = parseInt(match[1], 10);
-  const day = parseInt(match[2], 10);
-  let year = parseInt(match[3], 10);
-  if (match[3].length === 2) year += year < 70 ? 2000 : 1900;
-
-  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-  return { year, month, day };
-}
-
 function monthKeyFrom(raw: string): string {
-  const parsed = parseOrderDate(raw ?? "");
+  const parsed = parseCalendarDate(raw ?? "");
   if (!parsed) return "Unknown";
   return `${parsed.year}-${String(parsed.month).padStart(2, "0")}`;
 }
 
 function dateKeyFrom(raw: string): string {
-  const parsed = parseOrderDate(raw ?? "");
+  const parsed = parseCalendarDate(raw ?? "");
   if (!parsed) return "Unknown";
   return `${parsed.year}-${String(parsed.month).padStart(2, "0")}-${String(parsed.day).padStart(2, "0")}`;
 }
@@ -75,13 +64,22 @@ export async function computeSalesReports(): Promise<{
 
   const customerMap = new Map<string, number>();
   // Item sales are tracked per exact day, not aggregated across the whole
-  // month -- the Menu Item report shows individual dates.
-  const itemMap = new Map<string, { qty: number; total: number }>();
+  // month -- the Menu Item report shows individual dates. Keyed by
+  // resolved item code rather than the raw handwritten description --
+  // real data has the same item saved under different casing across scans
+  // (e.g. "COKE ZERO" vs "Coke Zero", both item code BECOZ8), which used
+  // to silently split into two separate report rows and undercount each
+  // variant (found 2026-08-17). Falls back to a lowercased description for
+  // items that never matched a code, so at least casing variants of those
+  // still merge too. label holds whichever description was seen first,
+  // for display.
+  const itemMap = new Map<string, { label: string; qty: number; total: number }>();
   const customerOrderLines: CustomerOrderLine[] = [];
 
   for (const row of dataRows) {
     const name = (row[NAME_COL] ?? "").trim();
     const description = (row[DESCRIPTION_COL] ?? "").trim();
+    const itemCode = (row[ITEM_COL] ?? "").trim();
     const amount = parseAmount(row[AMOUNT_COL] ?? "");
     const qty = parseAmount(row[QTY_COL] ?? "");
     if (!name && !description) continue;
@@ -95,9 +93,10 @@ export async function computeSalesReports(): Promise<{
       customerMap.set(key, (customerMap.get(key) ?? 0) + amount);
     }
     if (description) {
-      const key = `${dateKey}||${description}`;
-      const existing = itemMap.get(key) ?? { qty: 0, total: 0 };
-      itemMap.set(key, { qty: existing.qty + qty, total: existing.total + amount });
+      const itemKey = itemCode || description.toLowerCase();
+      const key = `${dateKey}||${itemKey}`;
+      const existing = itemMap.get(key) ?? { label: description, qty: 0, total: 0 };
+      itemMap.set(key, { label: existing.label, qty: existing.qty + qty, total: existing.total + amount });
     }
     if (name && description) {
       customerOrderLines.push({ customer: name, monthKey, dateKey, item: description, qty, amount });
@@ -113,9 +112,9 @@ export async function computeSalesReports(): Promise<{
 
   const itemMonthly = [...itemMap.entries()]
     .map(([key, v]) => {
-      const [dateKey, item] = key.split("||");
+      const [dateKey] = key.split("||");
       const monthKey = dateKey === "Unknown" ? "Unknown" : dateKey.slice(0, 7);
-      return { item, monthKey, dateKey, qty: v.qty, total: v.total };
+      return { item: v.label, monthKey, dateKey, qty: v.qty, total: v.total };
     })
     .sort((a, b) => b.dateKey.localeCompare(a.dateKey) || b.total - a.total);
 

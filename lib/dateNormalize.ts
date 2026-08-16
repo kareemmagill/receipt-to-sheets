@@ -2,7 +2,7 @@
 // header comment for the full layout.
 const DATE_COL = 2;
 
-interface DateCandidate {
+export interface DateCandidate {
   day: number;
   month: number;
   year: number;
@@ -24,6 +24,21 @@ function parseDateCandidates(n1: number, n2: number, yearRaw: string): DateCandi
   if (n1 >= 1 && n1 <= 31 && n2 >= 1 && n2 <= 12) candidates.push({ day: n1, month: n2, year });
   if (n2 >= 1 && n2 <= 31 && n1 >= 1 && n1 <= 12 && n1 !== n2) candidates.push({ day: n2, month: n1, year });
   return candidates;
+}
+
+// Single best-guess parse of a D-separator-D-separator-Y string, day-first
+// when genuinely ambiguous (no reference date to disambiguate against here
+// -- callers wanting that should use normalizeDate below instead). Used
+// anywhere that just needs *a* calendar date out of a saved row, e.g.
+// lib/reports.ts grouping sales by day/month -- which used to hand-roll
+// its own month-first parser, silently misreading every real dd/mm/yyyy
+// row this app actually writes (found 2026-08-17: everything with a day
+// > 12 fell into "Unknown", everything else landed in the wrong month).
+export function parseCalendarDate(raw: string): DateCandidate | null {
+  const match = raw.trim().match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2}|\d{4})$/);
+  if (!match) return null;
+  const candidates = parseDateCandidates(parseInt(match[1], 10), parseInt(match[2], 10), match[3]);
+  return candidates[0] ?? null;
 }
 
 function daysApart(c: DateCandidate, reference: Date): number {
