@@ -412,8 +412,7 @@ export default function VerificationForm({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-          <SingleToggleField
-            label="Slip Type"
+          <SlipTypeToggle
             value={order.slip_type}
             options={SLIP_TYPE_TOGGLE_OPTIONS}
             onChange={(v) => updateField("slip_type", v)}
@@ -530,72 +529,76 @@ export default function VerificationForm({
           tier={topTier(confidences, "member_status")}
         />
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ ...fieldLabelStyle, color: tierColor[waitressTier] }}>Waitress</span>
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ ...fieldLabelStyle, color: tierColor[waitressTier] }}>Waitress</span>
 
-          {waitressMode === "select" ? (
-            <select
-              value={order.waitress}
-              onChange={(e) => handleWaitressSelectChange(e.target.value)}
-              style={{ ...selectStyle, ...tierInputStyle(waitressTier) }}
-            >
-              <option value="">— None —</option>
-              {likelyWaitresses.length > 0 && (
-                <optgroup label="Likely matches">
-                  {likelyWaitresses.map((m) => (
-                    <option key={m.name} value={m.name}>
-                      {m.name}
+            {waitressMode === "select" ? (
+              <select
+                value={order.waitress}
+                onChange={(e) => handleWaitressSelectChange(e.target.value)}
+                style={{ ...selectStyle, ...tierInputStyle(waitressTier) }}
+              >
+                <option value="">— None —</option>
+                {likelyWaitresses.length > 0 && (
+                  <optgroup label="Likely matches">
+                    {likelyWaitresses.map((m) => (
+                      <option key={m.name} value={m.name}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label="All known waitresses">
+                  {otherWaitresses.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
                     </option>
                   ))}
                 </optgroup>
-              )}
-              <optgroup label="All known waitresses">
-                {otherWaitresses.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </optgroup>
-              <option value={MANUAL_WAITRESS}>Other / new name…</option>
-            </select>
-          ) : (
-            <div style={{ display: "flex", gap: 8 }}>
-              <input
-                value={order.waitress}
-                onChange={(e) => updateField("waitress", e.target.value)}
-                placeholder="Type waitress name"
-                style={{ ...inputStyle, ...tierInputStyle(waitressTier) }}
-              />
-              {(likelyWaitresses.length > 0 || otherWaitresses.length > 0) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setWaitressMode("select");
-                    updateField("waitress", "");
-                  }}
-                  style={secondaryButtonStyle}
-                >
-                  Back to list
-                </button>
-              )}
-            </div>
-          )}
+                <option value={MANUAL_WAITRESS}>Other / new name…</option>
+              </select>
+            ) : (
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  value={order.waitress}
+                  onChange={(e) => updateField("waitress", e.target.value)}
+                  placeholder="Type waitress name"
+                  style={{ ...inputStyle, ...tierInputStyle(waitressTier) }}
+                />
+                {(likelyWaitresses.length > 0 || otherWaitresses.length > 0) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWaitressMode("select");
+                      updateField("waitress", "");
+                    }}
+                    style={secondaryButtonStyle}
+                  >
+                    Back to list
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          <Field
+            label="Date"
+            type="date"
+            value={order.order_slip_date}
+            onChange={(v) => updateField("order_slip_date", v)}
+            tier={topTier(confidences, "order_slip_date")}
+          />
         </div>
 
-        <Field
-          label="Date"
-          type="date"
-          value={order.order_slip_date}
-          onChange={(v) => updateField("order_slip_date", v)}
-          tier={topTier(confidences, "order_slip_date")}
-        />
-
-        <Field
-          label="Memo"
-          value={order.memo}
-          onChange={(v) => updateField("memo", v)}
-          tier={topTier(confidences, "memo")}
-        />
+        {order.memo && (
+          <Field
+            label="Memo"
+            value={order.memo}
+            onChange={(v) => updateField("memo", v)}
+            tier={topTier(confidences, "memo")}
+          />
+        )}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -830,34 +833,49 @@ function ToggleField({
   );
 }
 
-// A toggle rendered as a single button (not one button per option) --
-// shows the current value's display text and flips to the other option on
-// click. Used where the choice is strictly binary (Slip Type: Bar/Restaurant)
-// and showing both options side by side is redundant (Kareem, 2026-08-17).
-function SingleToggleField({
-  label,
+// A single-button toggle, specific to Slip Type (Kareem, 2026-08-17):
+// locked (no longer clickable) once the model reads it with full
+// confidence, showing the real value in green. Otherwise it starts as a
+// neutral red "SELECT" prompt rather than silently carrying through a
+// shaky guess -- clicking it both confirms a value (flipping Bar/Restaurant
+// each press, same as before) and marks it reviewed, switching to amber
+// with the real value shown from then on.
+function SlipTypeToggle({
   value,
   options,
   onChange,
-  tier = "certain",
+  tier,
 }: {
-  label: string;
   value: string;
   options: { value: string; display: string }[];
   onChange: (value: string) => void;
-  tier?: ConfidenceTier;
+  tier: ConfidenceTier;
 }) {
+  const [resolved, setResolved] = useState(false);
+  const locked = tier === "certain";
+  const needsSelect = !locked && !resolved;
+  const displayTier: ConfidenceTier = locked ? "certain" : needsSelect ? "low" : "unsure";
   const current = options.find((opt) => opt.value === value) ?? options[0];
   const next = options.find((opt) => opt.value !== current.value) ?? options[1];
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <span style={{ ...fieldLabelStyle, color: tierColor[tier] }}>{label}</span>
+      <span style={{ ...fieldLabelStyle, color: tierColor[displayTier] }}>Slip Type</span>
       <button
         type="button"
-        onClick={() => onChange(next.value)}
-        style={{ ...toggleButtonStyle, ...toggleButtonActiveStyle, ...tierInputStyle(tier) }}
+        disabled={locked}
+        onClick={() => {
+          onChange(next.value);
+          setResolved(true);
+        }}
+        style={{
+          ...toggleButtonStyle,
+          ...toggleButtonActiveStyle,
+          ...tierInputStyle(displayTier),
+          ...(locked ? { cursor: "default" } : null),
+        }}
       >
-        {current.display}
+        {needsSelect ? "SELECT" : current.display}
       </button>
     </div>
   );
