@@ -1,4 +1,4 @@
-function normalize(s: string): string {
+export function normalize(s: string): string {
   return s
     .toUpperCase()
     .trim()
