@@ -356,20 +356,23 @@ export default function VerificationForm({
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <ToggleField
-          label="Slip Type"
-          value={order.slip_type}
-          options={SLIP_TYPE_TOGGLE_OPTIONS}
-          onChange={(v) => updateField("slip_type", v)}
-          tier={topTier(confidences, "slip_type")}
-        />
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+          <SingleToggleField
+            label="Slip Type"
+            value={order.slip_type}
+            options={SLIP_TYPE_TOGGLE_OPTIONS}
+            onChange={(v) => updateField("slip_type", v)}
+            tier={topTier(confidences, "slip_type")}
+          />
 
-        <Field
-          label="Slip Number"
-          value={order.order_slip_number}
-          onChange={(v) => updateField("order_slip_number", v)}
-          tier={topTier(confidences, "order_slip_number")}
-        />
+          <Field
+            label="Slip Number"
+            value={order.order_slip_number}
+            onChange={(v) => updateField("order_slip_number", v)}
+            tier={topTier(confidences, "order_slip_number")}
+            bold
+          />
+        </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <span style={{ ...fieldLabelStyle, color: tierColor[customerTier] }}>Customer / Name</span>
@@ -486,7 +489,7 @@ export default function VerificationForm({
                 <optgroup label="Likely matches">
                   {likelyWaitresses.map((m) => (
                     <option key={m.name} value={m.name}>
-                      {m.name} ({Math.round(m.score * 100)}%)
+                      {m.name}
                     </option>
                   ))}
                 </optgroup>
@@ -583,7 +586,7 @@ export default function VerificationForm({
                 </div>
               </div>
 
-              {!item.item &&
+              {(!item.item || itemFieldTier(confidences, index, "description", item.confidence) !== "certain") &&
                 (item.candidates ?? [])
                   .filter((c) => c.score >= 0.3 && c.description !== item.description).length > 0 && (
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -708,6 +711,39 @@ function ToggleField({
   );
 }
 
+// A toggle rendered as a single button (not one button per option) --
+// shows the current value's display text and flips to the other option on
+// click. Used where the choice is strictly binary (Slip Type: Bar/Restaurant)
+// and showing both options side by side is redundant (Kareem, 2026-08-17).
+function SingleToggleField({
+  label,
+  value,
+  options,
+  onChange,
+  tier = "certain",
+}: {
+  label: string;
+  value: string;
+  options: { value: string; display: string }[];
+  onChange: (value: string) => void;
+  tier?: ConfidenceTier;
+}) {
+  const current = options.find((opt) => opt.value === value) ?? options[0];
+  const next = options.find((opt) => opt.value !== current.value) ?? options[1];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span style={{ ...fieldLabelStyle, color: tierColor[tier] }}>{label}</span>
+      <button
+        type="button"
+        onClick={() => onChange(next.value)}
+        style={{ ...toggleButtonStyle, ...toggleButtonActiveStyle, ...tierInputStyle(tier) }}
+      >
+        {current.display}
+      </button>
+    </div>
+  );
+}
+
 // dd/mm/yyyy <-> yyyy-mm-dd -- <input type="date"> only accepts/emits ISO,
 // regardless of how the browser displays it to the person (locale-aware --
 // on a Philippines device that's normally day/month/year already, which is
@@ -732,6 +768,7 @@ function Field({
   tier = "certain",
   readOnly = false,
   type = "text",
+  bold = false,
 }: {
   label: string;
   value: string;
@@ -739,6 +776,7 @@ function Field({
   tier?: ConfidenceTier;
   readOnly?: boolean;
   type?: "text" | "date";
+  bold?: boolean;
 }) {
   return (
     <label
@@ -761,6 +799,7 @@ function Field({
           ...inputStyle,
           ...tierInputStyle(tier),
           ...(readOnly ? readOnlyInputStyle : null),
+          ...(bold ? { fontWeight: 700 } : null),
         }}
       />
     </label>
