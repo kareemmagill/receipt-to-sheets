@@ -10,7 +10,15 @@ const FOLDER_NAME = "PGYC Order Slip Photos";
 // "Service Accounts do not have storage quota" no matter what's shared with
 // them. See lib/googleOAuth.ts and app/api/auth/google/start for how the
 // refresh token this needs gets set up.
+// Cached alongside the OAuth2 client itself (lib/googleOAuth.ts) -- reused
+// across both call sites within a single upload (folder lookup + the
+// upload itself used to each build their own client, doubling the token
+// exchange) and across requests within a warm serverless instance.
+let cachedDrive: ReturnType<typeof google.drive> | null = null;
+
 function getDriveClient() {
+  if (cachedDrive) return cachedDrive;
+
   const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
   if (!refreshToken) {
     throw new Error("Missing GOOGLE_OAUTH_REFRESH_TOKEN env var -- visit /api/auth/google/start to authorize");
@@ -18,12 +26,20 @@ function getDriveClient() {
 
   const client = getOAuthClient();
   client.setCredentials({ refresh_token: refreshToken });
-  return google.drive({ version: "v3", auth: client });
+  cachedDrive = google.drive({ version: "v3", auth: client });
+  return cachedDrive;
 }
 
 let cachedFolderId: string | null = null;
 
 async function getOrCreateFolder(): Promise<string> {
+  // Skips a real Drive API round trip (files.list) on every single save --
+  // cachedFolderId only helps warm instances, and this app's traffic is
+  // low enough that cold starts (no cache) are common. The folder never
+  // changes, so once known, its ID can just be hardcoded via env var.
+  const knownFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+  if (knownFolderId) return knownFolderId;
+
   if (cachedFolderId) return cachedFolderId;
 
   const drive = getDriveClient();
