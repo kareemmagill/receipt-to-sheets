@@ -263,11 +263,14 @@ export default function ReportsPage() {
   );
 }
 
+// color/background explicit -- see the comment on VerificationForm's
+// inputStyle for why (dark-mode text was inheriting onto a white box).
 const selectStyle: React.CSSProperties = {
   padding: "8px 10px",
   fontSize: 14,
   borderRadius: 6,
   border: "1px solid #ccc",
+  color: "#111",
   background: "#fff",
 };
 
@@ -278,6 +281,8 @@ const inputStyle: React.CSSProperties = {
   border: "1px solid #ccc",
   flex: 1,
   minWidth: 160,
+  color: "#111",
+  background: "#fff",
 };
 
 const tableStyle: React.CSSProperties = {

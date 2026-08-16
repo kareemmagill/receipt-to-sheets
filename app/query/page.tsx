@@ -96,12 +96,16 @@ export default function QueryPage() {
   );
 }
 
+// color/background explicit -- see the comment on VerificationForm's
+// inputStyle for why (dark-mode text was inheriting onto a white box).
 const inputStyle: React.CSSProperties = {
   flex: 1,
   padding: "10px 12px",
   fontSize: 15,
   borderRadius: 6,
   border: "1px solid #ccc",
+  color: "#111",
+  background: "#fff",
 };
 
 const buttonStyle: React.CSSProperties = {

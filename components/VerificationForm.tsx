@@ -721,12 +721,23 @@ const fieldLabelStyle: React.CSSProperties = {
   color: "#333",
 };
 
+// color and background are both explicit here, not left to inherit --
+// this app has no real dark-mode design, but app/globals.css sets a dark
+// `color` on <body> when the device is in dark mode (via the --foreground
+// CSS variable), which was cascading into every input/select. Combined
+// with this white background (explicit on selectStyle, browser-default on
+// inputStyle on some mobile browsers even under a dark color-scheme), text
+// and background ended up the same color -- unreadable (reported
+// 2026-08-16: "customer name and waitress box... white box with white
+// text").
 const inputStyle: React.CSSProperties = {
   padding: "10px 12px",
   fontSize: 15,
   borderRadius: 6,
   border: "1px solid #ccc",
   flex: 1,
+  color: "#111",
+  background: "#fff",
 };
 
 const selectStyle: React.CSSProperties = {
@@ -734,6 +745,7 @@ const selectStyle: React.CSSProperties = {
   fontSize: 15,
   borderRadius: 6,
   border: "1px solid #ccc",
+  color: "#111",
   background: "#fff",
 };
 
