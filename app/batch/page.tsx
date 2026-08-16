@@ -6,6 +6,7 @@ import { makeId } from "@/lib/makeId";
 import type { OrderSlipExtraction } from "@/lib/extractSchema";
 import type { EditableOrder } from "@/components/VerificationForm";
 import { resizeImage } from "@/lib/resizeImage";
+import { Spinner } from "@/components/Spinner";
 
 // See app/page.tsx for why the archived copy is downsized too, not just
 // the OCR-read copy -- the full-resolution original was silently failing
@@ -200,6 +201,7 @@ export default function BatchImportPage() {
                 <div style={{ flex: 1, fontSize: 12 }}>
                   {result ? (
                     <span style={{ color: result.status === "error" ? "#b00020" : result.status === "done" ? "#0a7a2f" : "#555" }}>
+                      {result.status === "processing" && <Spinner />}
                       {result.message}
                     </span>
                   ) : (
@@ -219,6 +221,7 @@ export default function BatchImportPage() {
 
       {photos.length > 0 && (
         <button onClick={handleProcessAll} disabled={processing} style={{ ...buttonStyle, background: "#171717" }}>
+          {processing && <Spinner />}
           {processing ? "Processing…" : `Process All (${photos.length})`}
         </button>
       )}

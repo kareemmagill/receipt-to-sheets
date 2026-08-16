@@ -74,6 +74,18 @@ function itemFieldTier(confidences: FieldConfidences, index: number, field: stri
   return tierFromConfidence(confidence);
 }
 
+// Description gets a stricter rule than the general 0.75 cutoff (Kareem,
+// 2026-08-17): anything short of exactly 100% shows yellow, since the item
+// alternatives list only exists for description misreads and should be
+// reachable whenever there's any doubt at all, not just below 75%.
+function itemDescriptionTier(confidences: FieldConfidences, index: number, lineConfidence: number): ConfidenceTier {
+  const map = confidences.items.get(index);
+  const confidence = map?.has("description") ? map.get("description")! : lineConfidence;
+  if (confidence <= 0.25) return "low";
+  if (confidence >= 0.999) return "certain";
+  return "unsure";
+}
+
 const TIER_SEVERITY: Record<ConfidenceTier, number> = { certain: 0, unsure: 1, low: 2 };
 function worstTier(...tiers: ConfidenceTier[]): ConfidenceTier {
   return tiers.reduce((worst, t) => (TIER_SEVERITY[t] > TIER_SEVERITY[worst] ? t : worst), "certain" as ConfidenceTier);
@@ -161,6 +173,10 @@ export default function VerificationForm({
   // part of EditableItem/the saved order: this is a review-workflow flag,
   // not data that belongs in the sheet.
   const [approvedItems, setApprovedItems] = useState<Set<string>>(new Set());
+  // Which items currently have their alternative-description suggestions
+  // panel open -- click-to-reveal (Kareem, 2026-08-17), replacing the old
+  // always-visible-when-uncertain chips.
+  const [expandedSuggestions, setExpandedSuggestions] = useState<Set<string>>(new Set());
   // Only used for the Member branch of the Customer field (a select/manual
   // toggle, same as before). Non-Member is always free text -- see the
   // render below for why (a real bug, fixed 2026-08-15: it isn't a fixed
@@ -188,8 +204,19 @@ export default function VerificationForm({
   const customerTier = topTier(confidences, "customer_written");
   // "waitress" and "waitress_written" are the same field under two names
   // across the extraction/uncertain_fields boundary -- worst of the two
-  // wins, so a flag under either name shows.
-  const waitressTier = worstTier(topTier(confidences, "waitress"), topTier(confidences, "waitress_written"));
+  // wins, so a flag under either name shows. But that's only the model's
+  // own confidence in its handwriting *reading*, which can stay middling
+  // even when the name it read is a known one -- e.g. "Tracee" scored a
+  // fuzzy 100% list match yet still showed yellow (real bug, chit #34899,
+  // 2026-08-17). An exact match against a real known waitress overrides
+  // that up to certain: the name is confirmed correct regardless of how
+  // hesitant the model was about the handwriting itself.
+  const waitressExactMatch = (extraction.waitress_matches ?? []).some(
+    (m) => m.name === order.waitress && m.score >= 0.999
+  );
+  const waitressTier = waitressExactMatch
+    ? "certain"
+    : worstTier(topTier(confidences, "waitress"), topTier(confidences, "waitress_written"));
 
   const total = order.items.reduce((sum, item) => sum + (parseNumeric(item.amount) ?? 0), 0);
   // .every() on an empty array is true -- fine here, there's nothing to
@@ -280,6 +307,12 @@ export default function VerificationForm({
       next.delete(id);
       return next;
     });
+    setExpandedSuggestions((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
   }
 
   function addItem() {
@@ -288,6 +321,15 @@ export default function VerificationForm({
 
   function toggleApproveItem(id: string) {
     setApprovedItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSuggestions(id: string) {
+    setExpandedSuggestions((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -547,6 +589,12 @@ export default function VerificationForm({
         <h2 style={{ fontSize: 16 }}>Items</h2>
         {order.items.map((item, index) => {
           const approved = approvedItems.has(item.id);
+          const descTier = itemDescriptionTier(confidences, index, item.confidence);
+          const suggestions = (item.candidates ?? []).filter(
+            (c) => c.score >= 0.3 && c.description !== item.description
+          );
+          const suggestionsAvailable = descTier !== "certain" && suggestions.length > 0;
+          const suggestionsOpen = suggestionsAvailable && expandedSuggestions.has(item.id);
           return (
             <div
               key={item.id}
@@ -573,7 +621,7 @@ export default function VerificationForm({
                     label="Description"
                     value={item.description}
                     onChange={(v) => updateItem(item.id, "description", v)}
-                    tier={itemFieldTier(confidences, index, "description", item.confidence)}
+                    tier={descTier}
                   />
                 </div>
                 <div style={{ width: 76 }}>
@@ -586,23 +634,30 @@ export default function VerificationForm({
                 </div>
               </div>
 
-              {(!item.item || itemFieldTier(confidences, index, "description", item.confidence) !== "certain") &&
-                (item.candidates ?? [])
-                  .filter((c) => c.score >= 0.3 && c.description !== item.description).length > 0 && (
+              {suggestionsAvailable && (
+                <button type="button" onClick={() => toggleSuggestions(item.id)} style={suggestionsToggleStyle}>
+                  {suggestionsOpen ? "Hide suggestions ▲" : `Suggestions (${suggestions.length}) ▾`}
+                </button>
+              )}
+
+              {suggestionsOpen && (
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {(item.candidates ?? [])
-                    .filter((c) => c.score >= 0.3 && c.description !== item.description)
-                    .slice(0, 4)
-                    .map((c) => (
-                      <button
-                        key={c.itemCode}
-                        type="button"
-                        onClick={() => applyItemCandidate(item.id, c)}
-                        style={chipButtonStyle}
-                      >
-                        {c.description} ({Math.round(c.score * 100)}%)
-                      </button>
-                    ))}
+                  {suggestions.slice(0, 4).map((c) => (
+                    <button
+                      key={c.itemCode}
+                      type="button"
+                      onClick={() => {
+                        applyItemCandidate(item.id, c);
+                        toggleSuggestions(item.id);
+                      }}
+                      style={chipButtonStyle}
+                    >
+                      {c.description} ({Math.round(c.score * 100)}%)
+                    </button>
+                  ))}
+                  <button type="button" onClick={() => toggleSuggestions(item.id)} style={chipButtonStyle}>
+                    Input
+                  </button>
                 </div>
               )}
 
@@ -622,7 +677,10 @@ export default function VerificationForm({
                     tier={item.item ? "certain" : itemFieldTier(confidences, index, "item", item.confidence)}
                   />
                 </div>
-                <button type="button" onClick={() => deleteItem(item.id)} style={secondaryButtonStyle}>
+              </div>
+
+              <div style={{ display: "flex", gap: 6 }}>
+                <button type="button" onClick={() => deleteItem(item.id)} style={removeButtonStyle}>
                   Remove
                 </button>
                 <button
@@ -887,6 +945,29 @@ const chipButtonStyle: React.CSSProperties = {
   border: "1px solid #999",
   background: "#f4f4f4",
   color: "#333",
+  cursor: "pointer",
+};
+
+// Red, distinct from the neutral secondaryButtonStyle -- Remove is
+// destructive (Kareem, 2026-08-17).
+const removeButtonStyle: React.CSSProperties = {
+  padding: "10px 16px",
+  fontSize: 14,
+  borderRadius: 8,
+  border: "1px solid #b00020",
+  background: "#fff",
+  color: "#b00020",
+  cursor: "pointer",
+};
+
+const suggestionsToggleStyle: React.CSSProperties = {
+  alignSelf: "flex-start",
+  padding: 0,
+  border: "none",
+  background: "none",
+  color: "#b8860b",
+  fontSize: 12,
+  textDecoration: "underline",
   cursor: "pointer",
 };
 

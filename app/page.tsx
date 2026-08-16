@@ -300,6 +300,7 @@ export default function Home() {
 
           {imageDataUrl && (
             <button onClick={handleProcess} disabled={status === "loading"} style={buttonStyle}>
+              {status === "loading" && <Spinner />}
               {status === "loading" ? "Reading slip…" : "Process Order Slip"}
             </button>
           )}
