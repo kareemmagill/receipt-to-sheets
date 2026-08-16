@@ -12,8 +12,10 @@ interface Record {
   slipNumber: string;
   arNumber: string;
   customer: string;
+  date: string;
   summary: string;
   total: number;
+  photoLink: string | null;
 }
 
 function describeOrder(order: { slipNumber: string; arNumber: string; customer: string; itemCount: number }) {
@@ -198,29 +200,43 @@ export default function DevelopmentPage() {
           <table style={tableStyle}>
             <thead>
               <tr>
+                <th style={thStyle}>Date</th>
+                <th style={thStyle}>Slip #</th>
                 <th style={thStyle}>Name</th>
                 <th style={thStyle}>Order Summary</th>
                 <th style={{ ...thStyle, textAlign: "right" }}>Total</th>
+                <th style={thStyle}>Photo</th>
               </tr>
             </thead>
             <tbody>
               {(records ?? []).map((r, i) => (
                 <tr key={`${r.slipNumber || r.arNumber}|${i}`}>
+                  <td style={tdStyle}>{r.date || "—"}</td>
+                  <td style={tdStyle}>{r.slipNumber || "—"}</td>
                   <td style={tdStyle}>{r.customer}</td>
                   <td style={tdStyle}>{r.summary}</td>
                   <td style={{ ...tdStyle, textAlign: "right" }}>{formatMoney(r.total)}</td>
+                  <td style={tdStyle}>
+                    {r.photoLink ? (
+                      <a href={r.photoLink} target="_blank" rel="noopener noreferrer">
+                        View
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                 </tr>
               ))}
               {records && records.length === 0 && (
                 <tr>
-                  <td style={tdStyle} colSpan={3}>
+                  <td style={tdStyle} colSpan={6}>
                     No records.
                   </td>
                 </tr>
               )}
               {!records && (
                 <tr>
-                  <td style={tdStyle} colSpan={3}>
+                  <td style={tdStyle} colSpan={6}>
                     Loading…
                   </td>
                 </tr>
