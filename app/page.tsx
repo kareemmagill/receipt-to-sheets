@@ -119,15 +119,18 @@ export default function Home() {
         return;
       }
 
-      setExtraction(data.extraction);
-      setItemTemplate(data.itemTemplate ?? []);
-      setStatus("idle");
-
       // Check for an existing record under this exact slip type + number
-      // right away, before the reviewer goes through the whole
-      // verification form -- best-effort: if this lookup itself fails, the
-      // save-time duplicate check further down still catches it.
+      // *before* committing the extraction to state -- best-effort: if
+      // this lookup itself fails, the save-time duplicate check further
+      // down still catches it. Deliberately not setting extraction until
+      // this resolves: doing it earlier meant the verification form
+      // mounted, then immediately got replaced by the "Slip Already
+      // Recorded" screen a beat later -- a visible flash reported by
+      // Kareem, 2026-08-17. Resolving the duplicate check first and
+      // setting extraction + duplicateSlip together lands both in the
+      // same render, so only the final screen ever shows.
       const slipNumber = (data.extraction?.order_slip_number ?? "").trim();
+      let existing: ExistingOrderSummary | null = null;
       if (slipNumber) {
         try {
           const dupRes = await fetch("/api/check-duplicate", {
@@ -136,13 +139,16 @@ export default function Home() {
             body: JSON.stringify({ slipType: data.extraction.slip_type, slipNumber }),
           });
           const dupData = await dupRes.json();
-          if (dupData.ok && dupData.existing) {
-            setDuplicateSlip(dupData.existing);
-          }
+          if (dupData.ok && dupData.existing) existing = dupData.existing;
         } catch {
           // Best-effort -- see comment above.
         }
       }
+
+      setExtraction(data.extraction);
+      setItemTemplate(data.itemTemplate ?? []);
+      setDuplicateSlip(existing);
+      setStatus("idle");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setStatus("error");
