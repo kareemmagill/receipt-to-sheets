@@ -11,8 +11,8 @@ import { Spinner } from "@/components/Spinner";
 // See app/page.tsx for why the archived copy is downsized too, not just
 // the OCR-read copy -- the full-resolution original was silently failing
 // /api/save with an unparseable platform error. Kept in sync with that
-// file's cap (1024, Kareem, 2026-08-17).
-const ARCHIVAL_MAX_DIMENSION = 1024;
+// file's cap (800, Kareem, 2026-08-17).
+const ARCHIVAL_MAX_DIMENSION = 800;
 
 interface QueuedPhoto {
   id: string;

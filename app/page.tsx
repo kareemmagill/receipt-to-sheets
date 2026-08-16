@@ -11,13 +11,13 @@ import { loadLastPhoto, saveLastPhoto } from "@/lib/lastPhotoStore";
 import { resizeImage } from "@/lib/resizeImage";
 
 // Cap for the copy archived to Google Drive on save -- lowered from 2200
-// to 1024 (Kareem, 2026-08-17) to keep uploads faster and Drive usage
+// to 800 (Kareem, 2026-08-17) to keep uploads faster and Drive usage
 // down; still comfortably under Vercel's request body limit, which the
 // true full-resolution original was silently exceeding. Below the
 // 1568px OCR-read copy now, so this archived copy is for record-keeping
 // (the "already recorded" screen, manual lookups), not re-reading fine
 // handwriting detail.
-const ARCHIVAL_MAX_DIMENSION = 1024;
+const ARCHIVAL_MAX_DIMENSION = 800;
 
 export default function Home() {
   const inputRef = useRef<HTMLInputElement>(null);
