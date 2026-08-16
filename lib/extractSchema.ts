@@ -51,7 +51,20 @@ export const ORDER_SLIP_SCHEMA = {
     memo: { type: "string", description: "Any memo/note text on the slip. Empty string if absent." },
     items: { type: "array", items: ORDER_SLIP_ITEM_SCHEMA, description: "One entry per line item. Repeated identical items are separate lines unless clearly written as one combined quantity." },
     overall_confidence: { type: "number", description: "0 to 1: overall confidence in this extraction." },
-    uncertain_fields: { type: "array", items: { type: "string" }, description: "Names of fields you are not confident about, e.g. 'order_slip_date', 'items[1].amount'." },
+    uncertain_fields: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          field: { type: "string", description: "The field path, e.g. 'order_slip_date' or 'items[1].amount'." },
+          confidence: { type: "number", description: "0 to 1: your confidence in this specific field's reading." },
+        },
+        required: ["field", "confidence"],
+        additionalProperties: false,
+      },
+      description:
+        "Only fields you are not fully confident about, each paired with your confidence 0-1 for that specific field. Omit any field you're confident about entirely -- don't list every field.",
+    },
   },
   required: [
     "customer_written",
@@ -68,6 +81,11 @@ export const ORDER_SLIP_SCHEMA = {
   ],
   additionalProperties: false,
 };
+
+export interface UncertainField {
+  field: string;
+  confidence: number; // 0 to 1
+}
 
 export interface OrderSlipItem {
   qty: string;
@@ -95,7 +113,7 @@ export interface OrderSlipExtraction {
   memo: string;
   items: OrderSlipItem[];
   overall_confidence: number;
-  uncertain_fields: string[];
+  uncertain_fields: UncertainField[];
   // Filled in server-side — not part of what the vision model returns.
   // Always both matched and sent, regardless of member_status, so the
   // verification form can react live if member_status gets corrected after

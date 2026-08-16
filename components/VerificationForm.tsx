@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { OrderSlipExtraction, OrderSlipItem } from "@/lib/extractSchema";
+import type { OrderSlipExtraction, OrderSlipItem, UncertainField } from "@/lib/extractSchema";
 import { makeId } from "@/lib/makeId";
 import { matchItemCodeCandidates, ITEM_MATCH_CONFIDENT_THRESHOLD, type ItemCodeEntry } from "@/lib/itemCodeScoring";
 import { normalizeDate } from "@/lib/dateNormalize";
@@ -28,30 +28,56 @@ const PAID_TOGGLE_OPTIONS = [
   { value: "CREDIT", display: "Not Paid" },
 ];
 
-interface UncertainFields {
-  top: Set<string>;
-  items: Map<number, Set<string>>;
+// Three-way confidence indicator shown on every field (Kareem, 2026-08-17):
+// green when certain, yellow/amber when unsure, red at 25% confidence or
+// below. A field the model never flagged in uncertain_fields is treated as
+// fully confident (1.0) -- the model is instructed to only list fields
+// it's NOT sure about, so silence means certain.
+export type ConfidenceTier = "certain" | "unsure" | "low";
+
+function tierFromConfidence(confidence: number): ConfidenceTier {
+  if (confidence <= 0.25) return "low";
+  if (confidence < 0.75) return "unsure";
+  return "certain";
 }
 
-// Entries look like "order_slip_date" or "items[1].amount", sometimes with a
-// parenthetical explanation appended server-side (e.g. "items[0].item (no
-// confident code match — check manually)") -- the field path itself never
-// contains a space, so splitting on the first space strips that cleanly.
-function parseUncertainFields(raw: string[]): UncertainFields {
-  const top = new Set<string>();
-  const items = new Map<number, Set<string>>();
+interface FieldConfidences {
+  top: Map<string, number>;
+  items: Map<number, Map<string, number>>;
+}
+
+function parseUncertainFields(raw: UncertainField[]): FieldConfidences {
+  const top = new Map<string, number>();
+  const items = new Map<number, Map<string, number>>();
   for (const entry of raw) {
-    const path = entry.split(" ")[0];
-    const itemMatch = path.match(/^items\[(\d+)]\.(\w+)$/);
+    const itemMatch = entry.field.match(/^items\[(\d+)]\.(\w+)$/);
     if (itemMatch) {
       const index = Number(itemMatch[1]);
-      if (!items.has(index)) items.set(index, new Set());
-      items.get(index)!.add(itemMatch[2]);
+      if (!items.has(index)) items.set(index, new Map());
+      items.get(index)!.set(itemMatch[2], entry.confidence);
     } else {
-      top.add(path);
+      top.set(entry.field, entry.confidence);
     }
   }
   return { top, items };
+}
+
+function topTier(confidences: FieldConfidences, field: string): ConfidenceTier {
+  return tierFromConfidence(confidences.top.has(field) ? confidences.top.get(field)! : 1);
+}
+
+// Item sub-fields fall back to the line's own overall confidence (already
+// scored by the model for every item) rather than assuming full certainty,
+// when the model hasn't specifically flagged that sub-field on its own.
+function itemFieldTier(confidences: FieldConfidences, index: number, field: string, lineConfidence: number): ConfidenceTier {
+  const map = confidences.items.get(index);
+  const confidence = map?.has(field) ? map.get(field)! : lineConfidence;
+  return tierFromConfidence(confidence);
+}
+
+const TIER_SEVERITY: Record<ConfidenceTier, number> = { certain: 0, unsure: 1, low: 2 };
+function worstTier(...tiers: ConfidenceTier[]): ConfidenceTier {
+  return tiers.reduce((worst, t) => (TIER_SEVERITY[t] > TIER_SEVERITY[worst] ? t : worst), "certain" as ConfidenceTier);
 }
 
 function toEditable(extraction: OrderSlipExtraction): EditableOrder {
@@ -154,7 +180,12 @@ export default function VerificationForm({
     order.waitress && (extraction.waitress_list ?? []).includes(order.waitress) ? "select" : "manual"
   );
 
-  const uncertain = parseUncertainFields(extraction.uncertain_fields);
+  const confidences = parseUncertainFields(extraction.uncertain_fields);
+  const customerTier = topTier(confidences, "customer_written");
+  // "waitress" and "waitress_written" are the same field under two names
+  // across the extraction/uncertain_fields boundary -- worst of the two
+  // wins, so a flag under either name shows.
+  const waitressTier = worstTier(topTier(confidences, "waitress"), topTier(confidences, "waitress_written"));
 
   const total = order.items.reduce((sum, item) => sum + (parseNumeric(item.amount) ?? 0), 0);
 
@@ -306,20 +337,18 @@ export default function VerificationForm({
           value={order.slip_type}
           options={SLIP_TYPE_TOGGLE_OPTIONS}
           onChange={(v) => updateField("slip_type", v)}
-          uncertain={uncertain.top.has("slip_type")}
+          tier={topTier(confidences, "slip_type")}
         />
 
         <Field
           label="Slip Number"
           value={order.order_slip_number}
           onChange={(v) => updateField("order_slip_number", v)}
-          uncertain={uncertain.top.has("order_slip_number")}
+          tier={topTier(confidences, "order_slip_number")}
         />
 
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ ...fieldLabelStyle, color: uncertain.top.has("customer_written") ? "#b00020" : fieldLabelStyle.color }}>
-            Customer / Name
-          </span>
+          <span style={{ ...fieldLabelStyle, color: tierColor[customerTier] }}>Customer / Name</span>
 
           {order.member_status === "Non-Member" ? (
             // Always free text -- a walk-in isn't a fixed roster the way
@@ -334,13 +363,13 @@ export default function VerificationForm({
                 setCustomerError(null);
               }}
               placeholder="Type walk-in guest's name"
-              style={inputStyle}
+              style={{ ...inputStyle, ...tierInputStyle(customerTier) }}
             />
           ) : customerMode === "select" ? (
             <select
               value={order.customer_suggested}
               onChange={(e) => handleCustomerSelectChange(e.target.value)}
-              style={selectStyle}
+              style={{ ...selectStyle, ...tierInputStyle(customerTier) }}
             >
               <option value="" disabled>
                 — Select customer —
@@ -372,7 +401,7 @@ export default function VerificationForm({
                   setCustomerError(null);
                 }}
                 placeholder="Type customer name"
-                style={inputStyle}
+                style={{ ...inputStyle, ...tierInputStyle(customerTier) }}
               />
               <button
                 type="button"
@@ -416,21 +445,18 @@ export default function VerificationForm({
           value={order.member_status}
           options={MEMBER_TOGGLE_OPTIONS}
           onChange={(v) => updateField("member_status", v)}
-          uncertain={uncertain.top.has("member_status")}
+          tier={topTier(confidences, "member_status")}
         />
 
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span
-            style={{
-              ...fieldLabelStyle,
-              color: uncertain.top.has("waitress") || uncertain.top.has("waitress_written") ? "#b00020" : fieldLabelStyle.color,
-            }}
-          >
-            Waitress
-          </span>
+          <span style={{ ...fieldLabelStyle, color: tierColor[waitressTier] }}>Waitress</span>
 
           {waitressMode === "select" ? (
-            <select value={order.waitress} onChange={(e) => handleWaitressSelectChange(e.target.value)} style={selectStyle}>
+            <select
+              value={order.waitress}
+              onChange={(e) => handleWaitressSelectChange(e.target.value)}
+              style={{ ...selectStyle, ...tierInputStyle(waitressTier) }}
+            >
               <option value="">— None —</option>
               {likelyWaitresses.length > 0 && (
                 <optgroup label="Likely matches">
@@ -456,7 +482,7 @@ export default function VerificationForm({
                 value={order.waitress}
                 onChange={(e) => updateField("waitress", e.target.value)}
                 placeholder="Type waitress name"
-                style={inputStyle}
+                style={{ ...inputStyle, ...tierInputStyle(waitressTier) }}
               />
               {(likelyWaitresses.length > 0 || otherWaitresses.length > 0) && (
                 <button
@@ -479,21 +505,20 @@ export default function VerificationForm({
           type="date"
           value={order.order_slip_date}
           onChange={(v) => updateField("order_slip_date", v)}
-          uncertain={uncertain.top.has("order_slip_date")}
+          tier={topTier(confidences, "order_slip_date")}
         />
 
         <Field
           label="Memo"
           value={order.memo}
           onChange={(v) => updateField("memo", v)}
-          uncertain={uncertain.top.has("memo")}
+          tier={topTier(confidences, "memo")}
         />
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <h2 style={{ fontSize: 16 }}>Items</h2>
         {order.items.map((item, index) => {
-          const itemUncertain = uncertain.items.get(index) ?? new Set<string>();
           return (
             <div
               key={item.id}
@@ -512,7 +537,7 @@ export default function VerificationForm({
                     label="QTY"
                     value={item.qty}
                     onChange={(v) => updateItem(item.id, "qty", v)}
-                    uncertain={itemUncertain.has("qty")}
+                    tier={itemFieldTier(confidences, index, "qty", item.confidence)}
                   />
                 </div>
                 <div style={{ flex: 1, minWidth: 120 }}>
@@ -520,7 +545,7 @@ export default function VerificationForm({
                     label="Description"
                     value={item.description}
                     onChange={(v) => updateItem(item.id, "description", v)}
-                    uncertain={itemUncertain.has("description")}
+                    tier={itemFieldTier(confidences, index, "description", item.confidence)}
                   />
                 </div>
                 <div style={{ width: 90 }}>
@@ -528,11 +553,11 @@ export default function VerificationForm({
                     label="Item Code"
                     value={item.item}
                     onChange={(v) => updateItem(item.id, "item", v)}
-                    // Clears the moment there's any value, whether from a
-                    // candidate chip or typed directly -- unlike the other
-                    // fields, "uncertain" here means "still blank," not a
-                    // static flag from the original extraction.
-                    uncertain={itemUncertain.has("item") && !item.item}
+                    // Filled in (auto-matched or manually chosen) always
+                    // reads as certain regardless of the original reading
+                    // confidence -- a real code was actually picked, unlike
+                    // the other fields which just carry the raw extraction.
+                    tier={item.item ? "certain" : itemFieldTier(confidences, index, "item", item.confidence)}
                   />
                 </div>
                 <div style={{ width: 76 }}>
@@ -540,7 +565,7 @@ export default function VerificationForm({
                     label="Amount"
                     value={item.amount}
                     onChange={(v) => updateItem(item.id, "amount", v)}
-                    uncertain={itemUncertain.has("amount")}
+                    tier={itemFieldTier(confidences, index, "amount", item.confidence)}
                   />
                 </div>
                 <button
@@ -582,7 +607,7 @@ export default function VerificationForm({
                   value={item.class}
                   options={CLASS_OPTIONS}
                   onChange={(v) => updateItem(item.id, "class", v)}
-                  uncertain={itemUncertain.has("class")}
+                  tier={itemFieldTier(confidences, index, "class", item.confidence)}
                 />
               </div>
             </div>
@@ -603,7 +628,7 @@ export default function VerificationForm({
         value={order.terms}
         options={PAID_TOGGLE_OPTIONS}
         onChange={(v) => updateField("terms", v)}
-        uncertain={uncertain.top.has("terms")}
+        tier={topTier(confidences, "terms")}
       />
 
       <div style={{ display: "flex", gap: 12 }}>
@@ -624,17 +649,17 @@ function ToggleField({
   value,
   options,
   onChange,
-  uncertain = false,
+  tier = "certain",
 }: {
   label: string;
   value: string;
   options: { value: string; display: string }[];
   onChange: (value: string) => void;
-  uncertain?: boolean;
+  tier?: ConfidenceTier;
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <span style={{ ...fieldLabelStyle, color: uncertain ? "#b00020" : fieldLabelStyle.color }}>{label}</span>
+      <span style={{ ...fieldLabelStyle, color: tierColor[tier] }}>{label}</span>
       <div style={{ display: "flex", gap: 8 }}>
         {options.map((opt) => (
           <button
@@ -644,7 +669,7 @@ function ToggleField({
             style={{
               ...toggleButtonStyle,
               ...(value === opt.value ? toggleButtonActiveStyle : null),
-              ...(uncertain ? uncertainInputStyle : null),
+              ...tierInputStyle(tier),
             }}
           >
             {opt.display}
@@ -676,14 +701,14 @@ function Field({
   label,
   value,
   onChange,
-  uncertain = false,
+  tier = "certain",
   readOnly = false,
   type = "text",
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  uncertain?: boolean;
+  tier?: ConfidenceTier;
   readOnly?: boolean;
   type?: "text" | "date";
 }) {
@@ -695,7 +720,7 @@ function Field({
         gap: 4,
         flex: 1,
         fontSize: 13,
-        color: uncertain ? "#b00020" : "#333",
+        color: tierColor[tier],
       }}
     >
       {label}
@@ -706,7 +731,7 @@ function Field({
         readOnly={readOnly}
         style={{
           ...inputStyle,
-          ...(uncertain ? uncertainInputStyle : null),
+          ...tierInputStyle(tier),
           ...(readOnly ? readOnlyInputStyle : null),
         }}
       />
@@ -719,13 +744,13 @@ function SelectField({
   value,
   options,
   onChange,
-  uncertain = false,
+  tier = "certain",
 }: {
   label: string;
   value: string;
   options: string[];
   onChange: (value: string) => void;
-  uncertain?: boolean;
+  tier?: ConfidenceTier;
 }) {
   return (
     <label
@@ -735,15 +760,11 @@ function SelectField({
         gap: 4,
         flex: 1,
         fontSize: 13,
-        color: uncertain ? "#b00020" : "#333",
+        color: tierColor[tier],
       }}
     >
       {label}
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={{ ...selectStyle, ...(uncertain ? uncertainInputStyle : null) }}
-      >
+      <select value={value} onChange={(e) => onChange(e.target.value)} style={{ ...selectStyle, ...tierInputStyle(tier) }}>
         <option value="">—</option>
         {options.map((o) => (
           <option key={o} value={o}>
@@ -788,10 +809,19 @@ const selectStyle: React.CSSProperties = {
   background: "#fff",
 };
 
-const uncertainInputStyle: React.CSSProperties = {
-  borderColor: "#b00020",
-  borderWidth: 2,
+// Colors chosen to stay legible on the app's fixed light input backgrounds
+// (see the color/background comment on inputStyle above) regardless of the
+// device's system theme -- amber rather than pure yellow, which reads
+// poorly against white.
+const tierColor: Record<ConfidenceTier, string> = {
+  certain: "#2e7d32",
+  unsure: "#b8860b",
+  low: "#b00020",
 };
+
+function tierInputStyle(tier: ConfidenceTier): React.CSSProperties {
+  return { borderColor: tierColor[tier], borderWidth: 2 };
+}
 
 const readOnlyInputStyle: React.CSSProperties = {
   background: "#f4f4f4",

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { ORDER_SLIP_SCHEMA, type OrderSlipExtraction, type OrderSlipItem } from "@/lib/extractSchema";
+import { ORDER_SLIP_SCHEMA, type OrderSlipExtraction, type OrderSlipItem, type UncertainField } from "@/lib/extractSchema";
 import { readTab } from "@/lib/googleSheets";
 import { matchCustomer } from "@/lib/customerMatch";
 import { waitressNamesFromRows, walkInNamesFromRows } from "@/lib/knownNames";
@@ -39,7 +39,7 @@ Rules — follow these exactly:
 - The single number written after an item's description is its line total ("amount") — these slips don't have a separate per-unit rate column, so don't try to read one; the app computes it from amount ÷ qty.
 - For each item line, set "confidence" between 0 and 1 for how sure you are of that line's reading.
 - Set "overall_confidence" between 0 and 1 for the whole extraction.
-- List the names of any fields you are unsure about in "uncertain_fields" (e.g. "order_slip_date", "items[1].amount").
+- For any field you're not fully confident about, add it to "uncertain_fields" as {field, confidence} -- e.g. {"field": "order_slip_date", "confidence": 0.6}, {"field": "items[1].amount", "confidence": 0.15}. Omit fields you're confident about entirely; don't list every field.
 
 Return your extraction as structured JSON matching the provided schema.`;
 
@@ -80,7 +80,7 @@ interface RawVisionExtraction {
   memo?: string;
   items?: RawVisionItem[];
   overall_confidence?: number;
-  uncertain_fields?: string[];
+  uncertain_fields?: UncertainField[];
 }
 
 export async function POST(req: Request) {
@@ -143,14 +143,16 @@ export async function POST(req: Request) {
     }
 
     const raw: RawVisionExtraction = JSON.parse(textBlock.text);
-    const uncertainFields = [...(raw.uncertain_fields ?? [])];
+    const uncertainFields: UncertainField[] = [...(raw.uncertain_fields ?? [])];
 
     // The physical slip form (Bar vs Restaurant) is a stronger signal than
     // guessing Class from an individual item's name, so it takes priority
     // when the model could read the heading.
     const slipType = raw.slip_type === "Bar" || raw.slip_type === "Restaurant" ? raw.slip_type : "";
     if (!slipType) {
-      uncertainFields.push("slip_type (couldn't tell Bar vs Restaurant from the heading — Class guessed per item)");
+      // No real confidence signal for this one (there's nothing to score --
+      // the heading just wasn't legible at all), so a fixed low value.
+      uncertainFields.push({ field: "slip_type", confidence: 0.2 });
     }
 
     // Fetch every sheet this endpoint needs exactly once, all in parallel --
@@ -193,7 +195,9 @@ export async function POST(req: Request) {
       const codeMatch = candidates[0] && candidates[0].score >= ITEM_MATCH_CONFIDENT_THRESHOLD ? candidates[0] : null;
 
       if (!codeMatch) {
-        uncertainFields.push(`items[${index}].item (no confident code match — pick or enter manually)`);
+        // Real signal available here (unlike slip_type above) -- the
+        // fuzzy-match score itself, not a guess.
+        uncertainFields.push({ field: `items[${index}].item`, confidence: candidates[0]?.score ?? 0 });
       }
 
       // Invoice Class is always the same Restaurant/Bar value as Class —
