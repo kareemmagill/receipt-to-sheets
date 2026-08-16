@@ -70,16 +70,51 @@ export async function readTab(tabName: string) {
   return res.data.values ?? [];
 }
 
+function columnLetter(n: number): string {
+  let s = "";
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    s = String.fromCharCode(65 + rem) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
+// Deliberately NOT using Sheets' values.append() -- its "find the right
+// table to append to" heuristic was landing two columns to the right of
+// column A on this sheet regardless of range bounds (confirmed 2026-08-17
+// against the real spreadsheet: every saved row had "" "" as its first two
+// values, every field shifted right by two -- e.g. the Waitress column
+// silently held the Rate value instead). A plain values.update targeting
+// an explicitly computed row/column range has no ambiguity for Sheets to
+// get wrong, and testing the same real sheet confirmed it lands correctly.
+//
+// This isn't perfectly race-safe (two saves landing in the same instant
+// could compute the same "next row" and collide) -- but the app already
+// accepts that same class of risk for AR-number assignment
+// (lib/arNumber.ts also reads-then-computes-next non-atomically), and at
+// this app's real usage (one or two people scanning at a time, not a
+// concurrent flood) it's an acceptable tradeoff against values.append's
+// proven-unreliable auto-detection on this specific sheet.
 export async function appendRows(tabName: string, rows: (string | number)[][]) {
   if (!SHEET_ID) throw new Error("Missing GOOGLE_SHEET_ID env var");
+  if (rows.length === 0) return;
 
   const realTitle = await resolveTabTitle(tabName);
   const sheets = getSheetsClient();
-  await sheets.spreadsheets.values.append({
+
+  const existing = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
     range: quoteTabName(realTitle),
+  });
+  const nextRow = (existing.data.values?.length ?? 0) + 1;
+  const lastRow = nextRow + rows.length - 1;
+  const lastCol = columnLetter(Math.max(...rows.map((r) => r.length), 1));
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: `${quoteTabName(realTitle)}!A${nextRow}:${lastCol}${lastRow}`,
     valueInputOption: "USER_ENTERED",
-    insertDataOption: "INSERT_ROWS",
     requestBody: { values: rows },
   });
 }
