@@ -331,6 +331,9 @@ export default function Home() {
           <Link href="/reports" style={{ color: "#555" }}>
             Reports
           </Link>
+          <Link href="/daily-report" style={{ color: "#555" }}>
+            Daily Report
+          </Link>
           <Link href="/batch" style={{ color: "#555" }}>
             Batch Import
           </Link>

@@ -113,6 +113,16 @@ function toEditable(extraction: OrderSlipExtraction): EditableOrder {
   };
 }
 
+// A walk-in must always pay on the spot -- never allowed to be marked Not
+// Paid (Kareem, 2026-08-17). Applied on load too, not just on later toggle
+// clicks, in case a misread slip came back Non-Member + Not Paid already.
+function enforcePaymentRule(order: EditableOrder): EditableOrder {
+  if (order.member_status === "Non-Member" && order.terms === "CREDIT") {
+    return { ...order, terms: "COD" };
+  }
+  return order;
+}
+
 function parseNumeric(s: string): number | null {
   const n = parseFloat(s.replace(/[^0-9.-]/g, ""));
   return Number.isFinite(n) ? n : null;
@@ -166,7 +176,7 @@ export default function VerificationForm({
   confirmLabel?: string;
   saving?: boolean;
 }) {
-  const [order, setOrder] = useState<EditableOrder>(() => initialOrder ?? toEditable(extraction));
+  const [order, setOrder] = useState<EditableOrder>(() => enforcePaymentRule(initialOrder ?? toEditable(extraction)));
   const [showPhoto, setShowPhoto] = useState(false);
   // Per-item review gate (Kareem, 2026-08-17) -- a person has to explicitly
   // approve every line before Confirm & Save is enabled. Deliberately not
@@ -525,7 +535,14 @@ export default function VerificationForm({
           label="Member Status"
           value={order.member_status}
           options={MEMBER_TOGGLE_OPTIONS}
-          onChange={(v) => updateField("member_status", v)}
+          onChange={(v) => {
+            updateField("member_status", v);
+            // A walk-in must always pay on the spot -- never allowed to be
+            // marked Not Paid (Kareem, 2026-08-17).
+            if (v === "Non-Member" && order.terms === "CREDIT") {
+              updateField("terms", "COD");
+            }
+          }}
           tier={topTier(confidences, "member_status")}
         />
 
@@ -774,6 +791,7 @@ export default function VerificationForm({
         options={PAID_TOGGLE_OPTIONS}
         onChange={(v) => updateField("terms", v)}
         tier={topTier(confidences, "terms")}
+        disabledOptionValues={order.member_status === "Non-Member" ? ["CREDIT"] : []}
       />
 
       {!allItemsApproved && (
@@ -803,31 +821,42 @@ function ToggleField({
   options,
   onChange,
   tier = "certain",
+  disabledOptionValues = [],
 }: {
   label: string;
   value: string;
   options: { value: string; display: string }[];
   onChange: (value: string) => void;
   tier?: ConfidenceTier;
+  // Options that can't be picked right now -- e.g. Payment's "Not Paid" is
+  // disabled while Member Status is Non-Member (Kareem, 2026-08-17: a
+  // walk-in must always pay on the spot). Shown greyed out rather than
+  // hidden, so it's clear the option exists but isn't allowed here.
+  disabledOptionValues?: string[];
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <span style={{ ...fieldLabelStyle, color: tierColor[tier] }}>{label}</span>
       <div style={{ display: "flex", gap: 8 }}>
-        {options.map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => onChange(opt.value)}
-            style={{
-              ...toggleButtonStyle,
-              ...(value === opt.value ? toggleButtonActiveStyle : null),
-              ...tierInputStyle(tier),
-            }}
-          >
-            {opt.display}
-          </button>
-        ))}
+        {options.map((opt) => {
+          const disabled = disabledOptionValues.includes(opt.value);
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange(opt.value)}
+              style={{
+                ...toggleButtonStyle,
+                ...(value === opt.value ? toggleButtonActiveStyle : null),
+                ...tierInputStyle(tier),
+                ...(disabled ? disabledButtonStyle : null),
+              }}
+            >
+              {opt.display}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

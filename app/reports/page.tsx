@@ -119,9 +119,14 @@ export default function ReportsPage() {
     <main style={{ maxWidth: 720, margin: "0 auto", padding: "24px 16px", display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1 style={{ fontSize: 20 }}>Sales Reports</h1>
-        <Link href="/" style={{ fontSize: 13, color: "#555" }}>
-          ← Back to scanner
-        </Link>
+        <div style={{ display: "flex", gap: 12, fontSize: 13 }}>
+          <Link href="/daily-report" style={{ color: "#555" }}>
+            Daily Report
+          </Link>
+          <Link href="/" style={{ color: "#555" }}>
+            ← Back to scanner
+          </Link>
+        </div>
       </div>
 
       {status === "loading" && <p>Loading…</p>}
