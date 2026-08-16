@@ -20,9 +20,12 @@ export interface ExistingOrderSummary {
   customer: string;
   date: string;
   items: ExistingOrderItem[];
-  // ISO/UTC when the row was saved (see buildSalesOrderRows) -- empty for
-  // legacy rows saved before this column existed (2026-08-17).
+  // ISO/UTC when the row was saved, and who/what saved it (see
+  // buildSalesOrderRows) -- empty for legacy rows saved before these
+  // columns existed (2026-08-17).
   enteredAt: string;
+  enteredBy: string;
+  device: string;
   // Filled in by /api/check-duplicate from the Photo Log tab -- the
   // save-time checkDuplicateSlip path below leaves this unset, since the
   // post-save screen already has its own photo link.
@@ -43,7 +46,7 @@ export interface DuplicateCheckResult {
 // Sales Orders columns: Name(0), Class(1), Order Slip Date(2), Order Slip
 // Number(3), AR NO.(4), Terms(5), Memo(6), Class(7), QTY(8), Invoice
 // Class(9), Item(10), Description(11), Rate(12), Amount(13), Waitress(14),
-// Member Status(15), Entered At(16)
+// Member Status(15), Entered At(16), Entered By(17), Device(18)
 const NAME_COL = 0;
 const CLASS_COL = 1;
 const DATE_COL = 2;
@@ -55,6 +58,8 @@ const QTY_COL = 8;
 const RATE_COL = 12;
 const AMOUNT_COL = 13;
 const ENTERED_AT_COL = 16;
+const ENTERED_BY_COL = 17;
+const DEVICE_COL = 18;
 
 /**
  * Rows matching a given slip type + number. Bar and Food (Restaurant) order
@@ -96,6 +101,8 @@ export function findExistingOrderBySlip(
     customer: (existingRows[0][NAME_COL] ?? "").trim(),
     date: (existingRows[0][DATE_COL] ?? "").trim(),
     enteredAt: (existingRows[0][ENTERED_AT_COL] ?? "").trim(),
+    enteredBy: (existingRows[0][ENTERED_BY_COL] ?? "").trim(),
+    device: (existingRows[0][DEVICE_COL] ?? "").trim(),
     items: existingRows.map((r) => ({
       qty: (r[QTY_COL] ?? "").trim(),
       description: (r[DESC_COL] ?? "").trim(),

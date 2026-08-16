@@ -7,6 +7,8 @@ import type { OrderSlipExtraction } from "@/lib/extractSchema";
 import type { EditableOrder } from "@/components/VerificationForm";
 import { resizeImage } from "@/lib/resizeImage";
 import { Spinner } from "@/components/Spinner";
+import { getDeviceLabel } from "@/lib/deviceId";
+import { getStoredUserName } from "@/lib/userName";
 
 // See app/page.tsx for why the archived copy is downsized too, not just
 // the OCR-read copy -- the full-resolution original was silently failing
@@ -106,7 +108,14 @@ export default function BatchImportPage() {
         const saveRes = await fetch("/api/save", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ order, imageDataUrl: archivalImage }),
+          body: JSON.stringify({
+            order,
+            imageDataUrl: archivalImage,
+            // No separate name prompt here -- reuses whatever the front
+            // page already asked for and stored on this browser.
+            enteredBy: getStoredUserName(),
+            device: getDeviceLabel(),
+          }),
         });
         const saveData = await saveRes.json();
         if (saveData.exists) {

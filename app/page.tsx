@@ -9,6 +9,8 @@ import VerificationForm, { type EditableOrder } from "@/components/VerificationF
 import { Spinner } from "@/components/Spinner";
 import { loadLastPhoto, saveLastPhoto } from "@/lib/lastPhotoStore";
 import { resizeImage } from "@/lib/resizeImage";
+import { getDeviceLabel } from "@/lib/deviceId";
+import { getStoredUserName, setStoredUserName } from "@/lib/userName";
 
 // Cap for the copy archived to Google Drive on save -- lowered from 2200
 // to 800 (Kareem, 2026-08-17) to keep uploads faster and Drive usage
@@ -64,6 +66,30 @@ export default function Home() {
   // naturally stops applying once duplicateSlip points at a different
   // photo, with no effect/reset needed.
   const [failedThumbnailUrl, setFailedThumbnailUrl] = useState<string | null>(null);
+  // Who's using this browser -- asked once via a prompt on landing (see
+  // the effect below), then remembered from localStorage on every later
+  // visit. Recorded on save alongside the device label so it's clear who
+  // entered each record (Kareem, 2026-08-17).
+  const [userName, setUserName] = useState("");
+
+  useEffect(() => {
+    // Deferred via .then() rather than called directly in the effect body
+    // -- window.prompt() is a real side effect (a blocking dialog), and
+    // this pattern keeps the state updates out of the synchronous effect
+    // body, same as loadLastPhoto() below.
+    Promise.resolve().then(() => {
+      const stored = getStoredUserName();
+      if (stored) {
+        setUserName(stored);
+        return;
+      }
+      const entered = window.prompt("What's your name? (recorded against each record you save)");
+      if (entered && entered.trim()) {
+        setStoredUserName(entered.trim());
+        setUserName(entered.trim());
+      }
+    });
+  }, []);
 
   useEffect(() => {
     loadLastPhoto()
@@ -242,6 +268,8 @@ export default function Home() {
           order,
           imageDataUrl: archivalImage,
           replaceSlipNumber,
+          enteredBy: userName,
+          device: getDeviceLabel(),
         }),
       });
       const data = await res.json();
@@ -379,6 +407,7 @@ export default function Home() {
             {duplicateSlip.enteredAt && (
               <p style={{ color: "#777", fontSize: 13, margin: 0 }}>
                 Entered on {formatEnteredAt(duplicateSlip.enteredAt)}
+                {duplicateSlip.enteredBy ? ` by ${duplicateSlip.enteredBy}` : ""}
               </p>
             )}
           </div>

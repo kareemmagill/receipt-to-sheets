@@ -4,16 +4,16 @@ export { mostRecentOrderDate } from "./dateNormalize";
 
 // Matches the real Sales Orders header row exactly: Name, Class, Order Slip
 // Date, Order Slip Number, AR NO. , Terms, Memo, Class, QTY, Invoice Class,
-// Item, Description, Rate, Amount, Waitress, Member Status, Entered At
-// (Waitress and Member Status added 2026-08-15 as the 15th/16th columns;
-// Entered At added 2026-08-17 as the 17th -- each appended rather than
-// inserted among the existing ones, so nothing that reads this sheet by
-// position gets shifted) — with the Class column appearing twice (B and
-// H). Class is per-item (Restaurant or Bar, depending on the item), not
-// per-order, so rows for the same order can carry different Class values.
-// Memo holds only the slip's own memo/note text now -- Waitress used to be
-// folded into it (no column of its own existed yet) but that's no longer
-// needed.
+// Item, Description, Rate, Amount, Waitress, Member Status, Entered At,
+// Entered By, Device (Waitress and Member Status added 2026-08-15 as the
+// 15th/16th columns; Entered At/By/Device added 2026-08-17 as the
+// 17th-19th -- each appended rather than inserted among the existing
+// ones, so nothing that reads this sheet by position gets shifted) — with
+// the Class column appearing twice (B and H). Class is per-item
+// (Restaurant or Bar, depending on the item), not per-order, so rows for
+// the same order can carry different Class values. Memo holds only the
+// slip's own memo/note text now -- Waitress used to be folded into it (no
+// column of its own existed yet) but that's no longer needed.
 // A leading apostrophe tells Sheets' USER_ENTERED parser to store the value
 // as literal text instead of auto-parsing it — without this, a date-looking
 // string like "8/27/25" gets converted into a date serial number, which
@@ -27,7 +27,9 @@ function asLiteralText(value: string): string {
 export function buildSalesOrderRows(
   order: EditableOrder,
   arNumber: string,
-  referenceDate: Date | null
+  referenceDate: Date | null,
+  enteredBy = "",
+  device = ""
 ): (string | number)[][] {
   const customerName = order.customer_suggested || order.customer_written;
   // One timestamp per order (not re-computed per item row), same as
@@ -55,5 +57,7 @@ export function buildSalesOrderRows(
     order.waitress,
     order.member_status,
     enteredAt,
+    enteredBy,
+    device,
   ]);
 }

@@ -41,6 +41,11 @@ export async function POST(req: Request) {
     // replaces -- the chit's own printed number is always unique (Kareem,
     // 2026-08-16) and, unlike AR number, present even on legacy rows.
     const replaceSlipNumber: string | undefined = body?.replaceSlipNumber;
+    // Who/what saved this -- see lib/deviceId.ts and lib/userName.ts.
+    // Both best-effort/optional: an older client or a name the reviewer
+    // never entered just leaves these blank, never blocks a save.
+    const enteredBy: string = (body?.enteredBy ?? "").toString().trim();
+    const device: string = (body?.device ?? "").toString().trim();
 
     if (!order) {
       return NextResponse.json({ ok: false, error: "Missing order" }, { status: 400 });
@@ -77,7 +82,7 @@ export async function POST(req: Request) {
     // Computed fresh at save time — one AR number per order, applied to
     // every row of that order.
     const arNumber = nextArNumberFromRows(salesOrderRows);
-    const rows = buildSalesOrderRows(order, arNumber, mostRecentOrderDate(salesOrderRows));
+    const rows = buildSalesOrderRows(order, arNumber, mostRecentOrderDate(salesOrderRows), enteredBy, device);
 
     // The Sales Orders write and the Drive photo upload are independent of
     // each other -- the previous version awaited them strictly in sequence
