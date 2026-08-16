@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { OrderSlipExtraction, OrderSlipItem } from "@/lib/extractSchema";
 import { makeId } from "@/lib/makeId";
 import { matchItemCodeCandidates, ITEM_MATCH_CONFIDENT_THRESHOLD, type ItemCodeEntry } from "@/lib/itemCodeScoring";
+import { normalizeDate } from "@/lib/dateNormalize";
 import { Spinner } from "@/components/Spinner";
 
 export type EditableItem = OrderSlipItem & { id: string };
@@ -60,7 +61,14 @@ function toEditable(extraction: OrderSlipExtraction): EditableOrder {
     waitress: extraction.waitress,
     slip_type: extraction.slip_type,
     member_status: extraction.member_status,
-    order_slip_date: extraction.order_slip_date,
+    // Normalized for display too, not just at save time (lib/salesOrderRows.ts)
+    // -- otherwise what's shown on the review screen wouldn't match what
+    // actually gets written, which is exactly the kind of mismatch someone
+    // would (rightly) call a bug. No reference date here since there's no
+    // sheet data on hand client-side; the real reference-date
+    // disambiguation for genuinely ambiguous dates happens again at save
+    // time, so a rare edge case could still re-resolve differently there.
+    order_slip_date: normalizeDate(extraction.order_slip_date, null),
     order_slip_number: extraction.order_slip_number,
     terms: extraction.terms,
     memo: extraction.memo,
