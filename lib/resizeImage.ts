@@ -42,7 +42,22 @@ export async function resizeImage(dataUrl: string, maxDimension = 1568): Promise
 function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => resolve(img);
+    img.onload = async () => {
+      // onload alone isn't a strong enough guarantee that the image is
+      // fully decoded and safe to draw -- Safari in particular has been
+      // known to let drawImage run against a still-decoding large photo,
+      // producing a blank/black canvas (a real corrupted-archive-photo
+      // incident, Kareem, 2026-08-17: one saved chit's photo came back
+      // solid black). decode() waits for the actual pixel data to be
+      // ready before we draw it.
+      try {
+        if (img.decode) await img.decode();
+      } catch {
+        // Fall through and resolve anyway -- still better than failing
+        // the whole resize over a decode() quirk in some browser.
+      }
+      resolve(img);
+    };
     img.onerror = () => reject(new Error("Failed to decode image"));
     img.src = dataUrl;
   });
