@@ -372,11 +372,16 @@ export default function Home() {
 
       {duplicateSlip && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <h2 style={{ fontSize: 18 }}>Slip Already Recorded</h2>
-          <p style={{ color: "#8a6d00" }}>
-            Slip #{duplicateSlip.slipNumber} is already in the sheet
-            {duplicateSlip.arNumber ? ` (as ${duplicateSlip.arNumber})` : ""}.
-          </p>
+          <div>
+            <p style={{ color: "#b00020", fontSize: 18, fontWeight: 700, margin: 0 }}>
+              Slip #{duplicateSlip.slipNumber} already entered!
+            </p>
+            {duplicateSlip.enteredAt && (
+              <p style={{ color: "#777", fontSize: 13, margin: 0 }}>
+                Entered on {formatEnteredAt(duplicateSlip.enteredAt)}
+              </p>
+            )}
+          </div>
           <ExistingOrderRecap order={duplicateSlip} />
           {duplicateSlip.photoThumbnailUrl && duplicateSlip.photoThumbnailUrl !== failedThumbnailUrl ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -510,6 +515,19 @@ function sumAmounts(items: EditableOrder["items"]): number {
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Stored as ISO/UTC (see buildSalesOrderRows) -- displayed in the viewer's
+// own local time, dd/mm/yyyy to match the rest of the app's date format.
+function formatEnteredAt(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${dd}/${mm}/${yyyy}, ${hh}:${min}`;
 }
 
 function OrderSummary({ order }: { order: EditableOrder }) {
