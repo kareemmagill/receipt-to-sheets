@@ -1,14 +1,10 @@
 import { NextResponse } from "next/server";
 import { readTab, deleteDataRows } from "@/lib/googleSheets";
 
-// Wipes real sales data with no confirmation -- a local dev tool, never
-// meant to be reachable once this is deployed anywhere real, regardless of
-// what else is (or isn't) guarding the route.
+// Wipes real sales data -- Kareem confirmed (2026-08-16) he wants this
+// reachable in production, so the app-wide Basic Auth gate plus the
+// UI's own double confirm() are the only safeguards left in front of it.
 export async function POST() {
-  if (process.env.NODE_ENV === "production") {
-    return NextResponse.json({ ok: false, error: "Not available in production" }, { status: 404 });
-  }
-
   try {
     const rows = await readTab("Sales Orders");
     const dataRowCount = rows.length - 1;
