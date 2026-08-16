@@ -1,5 +1,6 @@
 import { readTab } from "./googleSheets";
 import { parseCalendarDate } from "./dateNormalize";
+import { photoLinksBySlipNumber, type PhotoLinkInfo } from "./photoLog";
 
 // Sales Orders columns -- see lib/salesOrderRows.ts's header comment for
 // the full layout.
@@ -147,6 +148,11 @@ export interface DailyReport {
   // never silently short.
   nonMembersNotPaid: DailyReportBucket;
   totalSales: number;
+  // Only the slip numbers that actually appear above -- keyed here so the
+  // report page can link a slip number straight to its archived photo
+  // without a separate round trip per row (Kareem, 2026-08-17: "link the
+  // slip number to the google image").
+  photos: Record<string, PhotoLinkInfo>;
 }
 
 export async function computeDailyReport(requestedDateKey?: string): Promise<DailyReport> {
@@ -165,5 +171,12 @@ export async function computeDailyReport(requestedDateKey?: string): Promise<Dai
   // though it won't appear in any breakdown section.
   const totalSales = slips.reduce((sum, s) => sum + s.total, 0);
 
-  return { dateKey, membersPaid, nonMembersPaid, membersNotPaid, nonMembersNotPaid, totalSales };
+  const allPhotos = await photoLinksBySlipNumber();
+  const photos: Record<string, PhotoLinkInfo> = {};
+  for (const s of slips) {
+    const info = allPhotos.get(s.slipNumber);
+    if (info) photos[s.slipNumber] = info;
+  }
+
+  return { dateKey, membersPaid, nonMembersPaid, membersNotPaid, nonMembersNotPaid, totalSales, photos };
 }
