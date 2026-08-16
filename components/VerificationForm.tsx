@@ -466,6 +466,7 @@ export default function VerificationForm({
 
         <Field
           label="Date"
+          type="date"
           value={order.order_slip_date}
           onChange={(v) => updateField("order_slip_date", v)}
           uncertain={uncertain.top.has("order_slip_date")}
@@ -644,18 +645,37 @@ function ToggleField({
   );
 }
 
+// dd/mm/yyyy <-> yyyy-mm-dd -- <input type="date"> only accepts/emits ISO,
+// regardless of how the browser displays it to the person (locale-aware --
+// on a Philippines device that's normally day/month/year already, which is
+// what gives this field its calendar picker for free). Everywhere else in
+// the app keeps working with the same dd/mm/yyyy string it already
+// expects (lib/dateNormalize.ts, salesOrderRows.ts) -- this conversion is
+// local to how the field displays/edits it, not a format change.
+function ddMmYyyyToIso(value: string): string {
+  const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : "";
+}
+
+function isoToDdMmYyyy(value: string): string {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : "";
+}
+
 function Field({
   label,
   value,
   onChange,
   uncertain = false,
   readOnly = false,
+  type = "text",
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   uncertain?: boolean;
   readOnly?: boolean;
+  type?: "text" | "date";
 }) {
   return (
     <label
@@ -670,8 +690,9 @@ function Field({
     >
       {label}
       <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
+        type={type}
+        value={type === "date" ? ddMmYyyyToIso(value) : value}
+        onChange={(e) => onChange(type === "date" ? isoToDdMmYyyy(e.target.value) : e.target.value)}
         readOnly={readOnly}
         style={{
           ...inputStyle,
