@@ -3,13 +3,14 @@ import Anthropic from "@anthropic-ai/sdk";
 import { ORDER_SLIP_SCHEMA, type OrderSlipExtraction, type OrderSlipItem } from "@/lib/extractSchema";
 import { readTab } from "@/lib/googleSheets";
 import { matchCustomer } from "@/lib/customerMatch";
-import { loadKnownWaitressNames, loadKnownWalkInNames } from "@/lib/knownNames";
-import { loadItemCorrections } from "@/lib/itemCorrections";
+import { waitressNamesFromRows, walkInNamesFromRows } from "@/lib/knownNames";
+import { itemCorrectionsFromRows } from "@/lib/itemCorrections";
 import {
-  loadItemCodeTemplate,
+  itemCodeTemplateFromRows,
   matchItemCodeCandidates,
   guessClass,
   ITEM_MATCH_CONFIDENT_THRESHOLD,
+  type ItemCodeEntry,
 } from "@/lib/itemCodeMatch";
 
 const client = new Anthropic();
@@ -96,7 +97,11 @@ export async function POST(req: Request) {
     const response = await client.messages.create({
       model: "claude-haiku-4-5",
       max_tokens: 8000,
-      system: SYSTEM_PROMPT,
+      // Cached: this ~40-line rules block is identical on every scan, and
+      // slips get scanned in bursts during service -- caching means only
+      // the first scan in a cache window (5 min TTL) pays to process it,
+      // cutting both latency and cost on every scan after that.
+      system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
       messages: [
         {
           role: "user",
@@ -141,14 +146,29 @@ export async function POST(req: Request) {
       uncertainFields.push("slip_type (couldn't tell Bar vs Restaurant from the heading — Class guessed per item)");
     }
 
+    // Fetch every sheet this endpoint needs exactly once, all in parallel --
+    // previously Sales Orders alone was read three separate times (once
+    // each for item corrections, walk-in names, waitress names), each a
+    // full round trip to Google for identical data. Promise.allSettled (not
+    // Promise.all) so one tab failing doesn't block extraction on the
+    // others -- each consumer below still degrades to an empty list on its
+    // own, same as before.
+    const [salesOrdersResult, inventoryResult, customersResult] = await Promise.allSettled([
+      readTab("Sales Orders"),
+      readTab("Inventory"),
+      readTab("Customers"),
+    ]);
+    const salesOrderRows = salesOrdersResult.status === "fulfilled" ? salesOrdersResult.value : [];
+
     // Look up an item code + Restaurant/Bar class for each line, matching
     // against past corrections first (see lib/itemCorrections.ts -- an
     // exact repeat of previously-corrected handwriting scores 1.0 there)
     // and the live Item Code Template tab. A missing read shouldn't block
     // the whole extraction — items just come back uncoded for manual entry.
-    let itemTemplate: Awaited<ReturnType<typeof loadItemCodeTemplate>> = [];
+    let itemTemplate: ItemCodeEntry[] = [];
     try {
-      const [corrections, template] = await Promise.all([loadItemCorrections(), loadItemCodeTemplate()]);
+      const template = inventoryResult.status === "fulfilled" ? itemCodeTemplateFromRows(inventoryResult.value) : [];
+      const corrections = itemCorrectionsFromRows(salesOrderRows);
       itemTemplate = [...corrections, ...template];
     } catch {
       // fall through with an empty template
@@ -225,7 +245,7 @@ export async function POST(req: Request) {
     // self-correcting -- fixing a misread walk-in name once makes it a
     // known name next time (see lib/knownNames.ts).
     try {
-      const customerRows = await readTab("Customers");
+      const customerRows = customersResult.status === "fulfilled" ? customersResult.value : [];
       extraction.customer_list = customerRows
         .map((row) => row[0])
         .filter((name): name is string => Boolean(name?.trim()));
@@ -240,7 +260,7 @@ export async function POST(req: Request) {
     }
 
     try {
-      extraction.walkin_list = await loadKnownWalkInNames();
+      extraction.walkin_list = walkInNamesFromRows(salesOrderRows);
       if (extraction.customer_written) {
         extraction.walkin_matches = matchCustomer(extraction.customer_written, extraction.walkin_list);
       }
@@ -265,7 +285,7 @@ export async function POST(req: Request) {
     // confident, and always send the full list + scored matches so the
     // form can offer it as a pick, not just free text.
     try {
-      const waitressNames = await loadKnownWaitressNames();
+      const waitressNames = waitressNamesFromRows(salesOrderRows);
       extraction.waitress_list = waitressNames;
       if (extraction.waitress) {
         const matches = matchCustomer(extraction.waitress, waitressNames);

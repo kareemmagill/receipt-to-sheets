@@ -1,5 +1,3 @@
-import { readTab } from "./googleSheets";
-
 // Sales Orders columns: Name(0) ... Waitress(14), Member Status(15) -- see
 // lib/duplicateCheck.ts for the full layout.
 const NAME_COL = 0;
@@ -15,9 +13,13 @@ const WALK_IN_FALLBACK_NAME = "DIRECT SALES- WALK IN";
  * corrected by the reviewer), this list is self-correcting over time: fix
  * a misread name once, and it becomes a known name matchCustomer can
  * confidently suggest for the same handwriting next time.
+ *
+ * Takes already-fetched Sales Orders rows rather than reading the tab
+ * itself -- callers needing both this and walkInNamesFromRows (or the item
+ * corrections list) share one fetch instead of each re-reading the same
+ * tab.
  */
-export async function loadKnownWaitressNames(): Promise<string[]> {
-  const rows = await readTab("Sales Orders");
+export function waitressNamesFromRows(rows: string[][]): string[] {
   const names = new Set<string>();
   for (const row of rows.slice(1)) {
     const name = (row[WAITRESS_COL] ?? "").trim();
@@ -31,8 +33,7 @@ export async function loadKnownWaitressNames(): Promise<string[]> {
  * there are few enough of these in practice that they're worth suggesting
  * even on a weak match, per Kareem (2026-08-15).
  */
-export async function loadKnownWalkInNames(): Promise<string[]> {
-  const rows = await readTab("Sales Orders");
+export function walkInNamesFromRows(rows: string[][]): string[] {
   const names = new Set<string>();
   for (const row of rows.slice(1)) {
     const memberStatus = (row[MEMBER_STATUS_COL] ?? "").trim();

@@ -1,4 +1,3 @@
-import { readTab } from "./googleSheets";
 import type { ItemCodeEntry } from "./itemCodeScoring";
 
 // Sales Orders columns: ... Item(10), Description(11) ... -- see
@@ -20,12 +19,14 @@ const DESC_COL = 11;
  * above the confident-match threshold.
  *
  * Last save wins when a description has been paired with more than one
- * code over time (readTab returns rows in sheet order, oldest first, so
+ * code over time (Sales Orders rows are in sheet order, oldest first, so
  * later entries overwrite earlier ones here) -- the most recent human
  * judgment is the one worth trusting.
+ *
+ * Takes already-fetched Sales Orders rows rather than reading the tab
+ * itself -- see lib/knownNames.ts's waitressNamesFromRows for why.
  */
-export async function loadItemCorrections(): Promise<ItemCodeEntry[]> {
-  const rows = await readTab("Sales Orders");
+export function itemCorrectionsFromRows(rows: string[][]): ItemCodeEntry[] {
   const byDescription = new Map<string, string>();
 
   for (const row of rows.slice(1)) {

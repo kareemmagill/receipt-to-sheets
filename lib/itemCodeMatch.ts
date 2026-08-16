@@ -1,10 +1,8 @@
-import { readTab } from "./googleSheets";
 import type { ItemCodeEntry } from "./itemCodeScoring";
 
-// Re-exported for existing server-side consumers (e.g. app/api/extract/
-// route.ts) -- the actual pure matching logic lives in ./itemCodeScoring so
-// it can also be imported from client components, which can't pull in this
-// file's readTab/googleapis dependency.
+// Re-exported for existing consumers (e.g. app/api/extract/route.ts) -- the
+// actual pure matching logic lives in ./itemCodeScoring so it can also be
+// imported from client components.
 export * from "./itemCodeScoring";
 
 // Inventory columns: A=(unused), B=Item code, C=Description. Far more
@@ -15,8 +13,10 @@ export * from "./itemCodeScoring";
 // without it), which is used as a bonus category signal when present but
 // never required, since slip_type (Bar vs Restaurant, from the physical
 // slip's own heading) is the primary class signal now.
-export async function loadItemCodeTemplate(): Promise<ItemCodeEntry[]> {
-  const rows = await readTab("Inventory");
+//
+// Takes already-fetched Inventory rows rather than reading the tab itself --
+// see lib/knownNames.ts's waitressNamesFromRows for why.
+export function itemCodeTemplateFromRows(rows: string[][]): ItemCodeEntry[] {
   return rows
     .slice(1) // header row
     .filter((r) => r[1] && r[2])
