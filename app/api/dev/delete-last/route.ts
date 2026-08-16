@@ -22,7 +22,14 @@ const AR_COL = 4;
 // If the last row's slip number is blank, don't group at all -- treat it as
 // a single row. Trusting a shared blank to mean "same order" would silently
 // sweep in every other blank-slip-number row above it too.
+// Wipes the most recent real order with no confirmation -- a local dev
+// tool, never meant to be reachable once this is deployed anywhere real,
+// regardless of what else is (or isn't) guarding the route.
 export async function POST() {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ ok: false, error: "Not available in production" }, { status: 404 });
+  }
+
   try {
     const rows = await readTab("Sales Orders");
     const dataRows = rows.slice(1);
