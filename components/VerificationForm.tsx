@@ -177,6 +177,12 @@ export default function VerificationForm({
   // panel open -- click-to-reveal (Kareem, 2026-08-17), replacing the old
   // always-visible-when-uncertain chips.
   const [expandedSuggestions, setExpandedSuggestions] = useState<Set<string>>(new Set());
+  // Items where the reviewer manually resolved a no-inventory-match state
+  // (picked a suggestion, or typed a code by hand) -- these show amber
+  // rather than snapping straight to green, since a human override still
+  // deserves a second look rather than reading as fully machine-confident
+  // (Kareem, 2026-08-17).
+  const [resolvedItems, setResolvedItems] = useState<Set<string>>(new Set());
   // Only used for the Member branch of the Customer field (a select/manual
   // toggle, same as before). Non-Member is always free text -- see the
   // render below for why (a real bug, fixed 2026-08-15: it isn't a fixed
@@ -296,6 +302,7 @@ export default function VerificationForm({
         item.id === id ? { ...item, description: candidate.description, item: candidate.itemCode } : item
       ),
     }));
+    setResolvedItems((prev) => new Set(prev).add(id));
   }
 
   function deleteItem(id: string) {
@@ -308,6 +315,12 @@ export default function VerificationForm({
       return next;
     });
     setExpandedSuggestions((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    setResolvedItems((prev) => {
       if (!prev.has(id)) return prev;
       const next = new Set(prev);
       next.delete(id);
@@ -589,11 +602,36 @@ export default function VerificationForm({
         <h2 style={{ fontSize: 16 }}>Items</h2>
         {order.items.map((item, index) => {
           const approved = approvedItems.has(item.id);
-          const descTier = itemDescriptionTier(confidences, index, item.confidence);
+          // No item code means the OCR description didn't confidently match
+          // anything in Inventory -- this always wins over both the
+          // manually-resolved flag (a stale resolution from a description
+          // that's since been re-edited back into no-match) and the normal
+          // reading-confidence tiers, since it's a distinct problem (not in
+          // Inventory) from how legible the handwriting was (Kareem,
+          // 2026-08-17).
+          const noItemCodeMatch = !item.item;
+          const manuallyResolved = resolvedItems.has(item.id);
+          const descTier = noItemCodeMatch
+            ? "low"
+            : manuallyResolved
+              ? "unsure"
+              : itemDescriptionTier(confidences, index, item.confidence);
+          const itemCodeTier = noItemCodeMatch ? "low" : manuallyResolved ? "unsure" : "certain";
+
+          // While there's no match at all, every candidate Inventory might
+          // have is shown up front (not click-to-reveal) -- there's nothing
+          // to click into first, the reviewer needs to see the options
+          // immediately to resolve the red state.
+          const noMatchCandidates = item.candidates ?? [];
+          const showNoMatchPicker = noItemCodeMatch && noMatchCandidates.length > 0;
+
+          // Once there IS a code, the click-to-reveal alternates list still
+          // applies if the description reading itself is less than fully
+          // confident.
           const suggestions = (item.candidates ?? []).filter(
             (c) => c.score >= 0.3 && c.description !== item.description
           );
-          const suggestionsAvailable = descTier !== "certain" && suggestions.length > 0;
+          const suggestionsAvailable = !noItemCodeMatch && descTier !== "certain" && suggestions.length > 0;
           const suggestionsOpen = suggestionsAvailable && expandedSuggestions.has(item.id);
           return (
             <div
@@ -634,6 +672,24 @@ export default function VerificationForm({
                 </div>
               </div>
 
+              {showNoMatchPicker && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <span style={{ fontSize: 12, color: tierColor.low }}>No inventory match — choose the correct item:</span>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {noMatchCandidates.map((c) => (
+                      <button
+                        key={c.itemCode}
+                        type="button"
+                        onClick={() => applyItemCandidate(item.id, c)}
+                        style={chipButtonStyle}
+                      >
+                        {c.description} ({Math.round(c.score * 100)}%)
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {suggestionsAvailable && (
                 <button type="button" onClick={() => toggleSuggestions(item.id)} style={suggestionsToggleStyle}>
                   {suggestionsOpen ? "Hide suggestions ▲" : `Suggestions (${suggestions.length}) ▾`}
@@ -669,12 +725,17 @@ export default function VerificationForm({
                   <Field
                     label="Item Code"
                     value={item.item}
-                    onChange={(v) => updateItem(item.id, "item", v)}
-                    // Filled in (auto-matched or manually chosen) always
-                    // reads as certain regardless of the original reading
-                    // confidence -- a real code was actually picked, unlike
-                    // the other fields which just carry the raw extraction.
-                    tier={item.item ? "certain" : itemFieldTier(confidences, index, "item", item.confidence)}
+                    onChange={(v) => {
+                      // Typing a code by hand while there was no match is
+                      // the same kind of manual resolution as picking a
+                      // suggestion chip -- marks it resolved so it goes to
+                      // amber rather than snapping straight to green.
+                      if (noItemCodeMatch && v.trim()) {
+                        setResolvedItems((prev) => new Set(prev).add(item.id));
+                      }
+                      updateItem(item.id, "item", v);
+                    }}
+                    tier={itemCodeTier}
                   />
                 </div>
               </div>
