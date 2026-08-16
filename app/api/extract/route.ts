@@ -95,8 +95,15 @@ export async function POST(req: Request) {
     const { mediaType, data } = parseDataUrl(imageDataUrl);
 
     const response = await client.messages.create({
-      model: "claude-haiku-4-5",
+      model: "claude-sonnet-5",
       max_tokens: 8000,
+      // Sonnet 5 defaults to adaptive thinking when this is omitted -- same
+      // failure mode confirmed on the /api/query route (2026-08-16):
+      // thinking can consume the whole max_tokens budget before any actual
+      // output, leaving nothing for the extraction JSON. Reading a single
+      // photo against a fixed schema doesn't benefit from open-ended
+      // reasoning, so it's switched off outright.
+      thinking: { type: "disabled" },
       // Cached: this ~40-line rules block is identical on every scan, and
       // slips get scanned in bursts during service -- caching means only
       // the first scan in a cache window (5 min TTL) pays to process it,
