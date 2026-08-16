@@ -66,16 +66,26 @@ const DEVICE_COL = 18;
  * slips are printed on separate pads, so the same number legitimately
  * exists once per type -- matching on number alone would wrongly flag two
  * different real chits as duplicates of each other (real gap found
- * 2026-08-17). Falls back to number-only when the type wasn't read, rather
- * than silently missing a real duplicate.
+ * 2026-08-17).
+ *
+ * Prefers an exact type + number match, but falls back to number-only if
+ * that finds nothing. Slip type is read by the same model call that's
+ * often not confident about it at all -- confident enough to build a whole
+ * "SELECT" UI around it (see SlipTypeToggle in components/VerificationForm)
+ * -- so requiring it to match on every single check risks silently missing
+ * a real duplicate whenever two scans of the same physical slip happen to
+ * read its type differently (real miss found 2026-08-17: slip #21212
+ * entered twice, second time not flagged). A missed cross-pad-number
+ * false positive here is a much smaller cost than a silently duplicated
+ * order.
  */
 function findExistingRows(slipType: string, slipNumber: string, rows: string[][]): string[][] {
   const type = slipType.trim();
-  return rows
-    .slice(1)
-    .filter(
-      (r) => (r[SLIP_NUM_COL] ?? "").trim() === slipNumber && (!type || (r[CLASS_COL] ?? "").trim() === type)
-    );
+  const numberMatches = rows.slice(1).filter((r) => (r[SLIP_NUM_COL] ?? "").trim() === slipNumber);
+  if (!type) return numberMatches;
+
+  const typeMatches = numberMatches.filter((r) => (r[CLASS_COL] ?? "").trim() === type);
+  return typeMatches.length > 0 ? typeMatches : numberMatches;
 }
 
 /**
