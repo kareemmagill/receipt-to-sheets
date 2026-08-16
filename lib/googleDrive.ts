@@ -89,5 +89,30 @@ export async function uploadOrderPhoto(params: {
   const webViewLink = res.data.webViewLink;
   if (!fileId || !webViewLink) throw new Error("Drive upload did not return a file link");
 
+  // "Anyone with the link" (not publicly searchable/indexed) -- lets the
+  // photo embed inline in the app as a plain <img> for any staff member,
+  // not just whoever's Google account the upload happened to run as.
+  // Without this, "View photo" opened Drive in a new tab and only worked
+  // for whoever was signed into that same account (Kareem, 2026-08-17).
+  try {
+    await drive.permissions.create({
+      fileId,
+      requestBody: { role: "reader", type: "anyone" },
+    });
+  } catch {
+    // Best-effort -- the file still saved and webViewLink still works for
+    // the uploading account even if this fails.
+  }
+
   return { fileId, webViewLink };
+}
+
+// Drive's thumbnail endpoint serves the actual image bytes directly (no
+// Google sign-in prompt, unlike webViewLink's own viewer page), so it's
+// what the app uses to embed a saved chit's photo inline instead of
+// linking out to Drive. Needs the file to be link-shareable (see the
+// permissions.create call above) -- photos uploaded before that was added
+// won't embed until re-shared.
+export function driveThumbnailUrl(fileId: string, sizePx = 1200): string {
+  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w${sizePx}`;
 }

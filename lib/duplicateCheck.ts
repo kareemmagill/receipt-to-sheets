@@ -24,6 +24,10 @@ export interface ExistingOrderSummary {
   // save-time checkDuplicateSlip path below leaves this unset, since the
   // post-save screen already has its own photo link.
   photoLink?: string;
+  // Embeddable version of photoLink (see lib/googleDrive.ts's
+  // driveThumbnailUrl) -- absent if the photo predates that file's
+  // link-sharing fix, in which case photoLink is still the fallback.
+  photoThumbnailUrl?: string;
 }
 
 export interface DuplicateCheckResult {

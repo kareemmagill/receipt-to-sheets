@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { readTab } from "@/lib/googleSheets";
 import { findExistingOrderBySlip } from "@/lib/duplicateCheck";
+import { driveThumbnailUrl } from "@/lib/googleDrive";
 
 // Photo Log columns -- see PHOTO_LOG_HEADER in app/api/save/route.ts.
 const LOG_SLIP_COL = 1;
 const LOG_PHOTO_LINK_COL = 4;
+
+// Extracts the file ID out of a Drive webViewLink like
+// https://drive.google.com/file/d/FILE_ID/view?usp=drivesdk
+const DRIVE_FILE_ID_REGEX = /\/d\/([a-zA-Z0-9_-]+)/;
 
 // Called right after OCR extraction, before the reviewer sees the
 // verification form -- lets the "Slip Already Recorded" screen catch an
@@ -32,15 +37,18 @@ export async function POST(req: Request) {
     // recent entry wins if the same slip number was ever logged more than
     // once.
     let photoLink: string | undefined;
+    let photoThumbnailUrl: string | undefined;
     try {
       const logRows = await readTab("Photo Log");
       const match = [...logRows.slice(1)].reverse().find((row) => (row[LOG_SLIP_COL] ?? "").trim() === slipNumber);
       photoLink = (match?.[LOG_PHOTO_LINK_COL] ?? "").trim() || undefined;
+      const fileId = photoLink?.match(DRIVE_FILE_ID_REGEX)?.[1];
+      if (fileId) photoThumbnailUrl = driveThumbnailUrl(fileId);
     } catch {
       // No Photo Log tab yet -- fine, just nothing to link to.
     }
 
-    return NextResponse.json({ ok: true, existing: { ...existing, photoLink } });
+    return NextResponse.json({ ok: true, existing: { ...existing, photoLink, photoThumbnailUrl } });
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : String(err) },

@@ -54,6 +54,13 @@ export default function Home() {
   const [editingSlipNumber, setEditingSlipNumber] = useState<string | null>(null);
   const [deleteStatus, setDeleteStatus] = useState<"idle" | "deleting" | "deleted" | "error">("idle");
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Set if the inline thumbnail fails to load -- e.g. a photo archived
+  // before the Drive link-sharing fix (Kareem, 2026-08-17), which isn't
+  // link-shareable yet. Falls back to the plain "View" link instead of a
+  // broken image icon. Keyed by URL rather than a plain boolean so it
+  // naturally stops applying once duplicateSlip points at a different
+  // photo, with no effect/reset needed.
+  const [failedThumbnailUrl, setFailedThumbnailUrl] = useState<string | null>(null);
 
   useEffect(() => {
     loadLastPhoto()
@@ -368,10 +375,27 @@ export default function Home() {
             {duplicateSlip.arNumber ? ` (as ${duplicateSlip.arNumber})` : ""}.
           </p>
           <ExistingOrderRecap order={duplicateSlip} />
-          {duplicateSlip.photoLink && (
-            <a href={duplicateSlip.photoLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13 }}>
-              View photo of recorded chit
-            </a>
+          {duplicateSlip.photoThumbnailUrl && duplicateSlip.photoThumbnailUrl !== failedThumbnailUrl ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={duplicateSlip.photoThumbnailUrl}
+                alt="Recorded chit"
+                onError={() => setFailedThumbnailUrl(duplicateSlip.photoThumbnailUrl ?? null)}
+                style={{ width: "100%", borderRadius: 8, border: "1px solid #ccc" }}
+              />
+              {duplicateSlip.photoLink && (
+                <a href={duplicateSlip.photoLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#777" }}>
+                  Open in Google Drive
+                </a>
+              )}
+            </div>
+          ) : (
+            duplicateSlip.photoLink && (
+              <a href={duplicateSlip.photoLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13 }}>
+                View photo of recorded chit
+              </a>
+            )
           )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button onClick={handleProceedToUpdate} style={{ ...buttonStyle, flex: 1 }}>
