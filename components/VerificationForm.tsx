@@ -140,8 +140,18 @@ export default function VerificationForm({
     order.customer_suggested ? "select" : order.customer_written ? "select" : "manual"
   );
   const [customerError, setCustomerError] = useState<string | null>(null);
+  // "select" only when the read name is already a known waitress -- unlike
+  // customer_suggested (only ever a confident match or empty, by
+  // construction of the extract API), extraction.waitress can legitimately
+  // hold a legible-but-unmatched raw name (e.g. "Tracee" the first time
+  // she's ever scanned). Gating on truthiness alone (the old check) meant
+  // the <select> tried to show a value with no matching <option>, which
+  // HTML silently renders as its first option ("— None —") -- looking
+  // exactly like the name wasn't read at all, even though it was (real bug,
+  // found 2026-08-17). "manual" shows it as editable free text instead,
+  // same as a first-time customer name.
   const [waitressMode, setWaitressMode] = useState<"select" | "manual">(
-    order.waitress ? "select" : "manual"
+    order.waitress && (extraction.waitress_list ?? []).includes(order.waitress) ? "select" : "manual"
   );
 
   const uncertain = parseUncertainFields(extraction.uncertain_fields);
