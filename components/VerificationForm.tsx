@@ -14,7 +14,6 @@ export type EditableOrder = Omit<OrderSlipExtraction, "items" | "uncertain_field
 
 const MANUAL_CUSTOMER = "__MANUAL__";
 const MANUAL_WAITRESS = "__MANUAL__";
-const CLASS_OPTIONS = ["Restaurant", "Bar"];
 const SLIP_TYPE_TOGGLE_OPTIONS = [
   { value: "Bar", display: "Order Slip (Bar)" },
   { value: "Restaurant", display: "Food Order Slip" },
@@ -157,6 +156,11 @@ export default function VerificationForm({
 }) {
   const [order, setOrder] = useState<EditableOrder>(() => initialOrder ?? toEditable(extraction));
   const [showPhoto, setShowPhoto] = useState(false);
+  // Per-item review gate (Kareem, 2026-08-17) -- a person has to explicitly
+  // approve every line before Confirm & Save is enabled. Deliberately not
+  // part of EditableItem/the saved order: this is a review-workflow flag,
+  // not data that belongs in the sheet.
+  const [approvedItems, setApprovedItems] = useState<Set<string>>(new Set());
   // Only used for the Member branch of the Customer field (a select/manual
   // toggle, same as before). Non-Member is always free text -- see the
   // render below for why (a real bug, fixed 2026-08-15: it isn't a fixed
@@ -188,6 +192,10 @@ export default function VerificationForm({
   const waitressTier = worstTier(topTier(confidences, "waitress"), topTier(confidences, "waitress_written"));
 
   const total = order.items.reduce((sum, item) => sum + (parseNumeric(item.amount) ?? 0), 0);
+  // .every() on an empty array is true -- fine here, there's nothing to
+  // approve if every item was removed, though the items-required check
+  // elsewhere still blocks a zero-item save.
+  const allItemsApproved = order.items.every((item) => approvedItems.has(item.id));
 
   const likelyMatches = (extraction.customer_matches ?? []).filter((m) => m.score >= 0.3);
   const likelyNames = new Set(likelyMatches.map((m) => m.name));
@@ -266,10 +274,25 @@ export default function VerificationForm({
   function deleteItem(id: string) {
     if (!confirm("Sure to remove item?")) return;
     setOrder((prev) => ({ ...prev, items: prev.items.filter((item) => item.id !== id) }));
+    setApprovedItems((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
   }
 
   function addItem() {
     setOrder((prev) => ({ ...prev, items: [...prev.items, emptyItem()] }));
+  }
+
+  function toggleApproveItem(id: string) {
+    setApprovedItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   function handleCustomerSelectChange(value: string) {
@@ -296,6 +319,7 @@ export default function VerificationForm({
       setCustomerError("Select or enter a customer before saving.");
       return;
     }
+    if (!allItemsApproved) return; // button is disabled in this state; belt and suspenders
     setCustomerError(null);
     onConfirm(order);
   }
@@ -519,11 +543,12 @@ export default function VerificationForm({
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <h2 style={{ fontSize: 16 }}>Items</h2>
         {order.items.map((item, index) => {
+          const approved = approvedItems.has(item.id);
           return (
             <div
               key={item.id}
               style={{
-                border: "1px solid #ccc",
+                border: `1px solid ${approved ? "#2e7d32" : "#ccc"}`,
                 borderRadius: 8,
                 padding: 10,
                 display: "flex",
@@ -548,18 +573,6 @@ export default function VerificationForm({
                     tier={itemFieldTier(confidences, index, "description", item.confidence)}
                   />
                 </div>
-                <div style={{ width: 90 }}>
-                  <Field
-                    label="Item Code"
-                    value={item.item}
-                    onChange={(v) => updateItem(item.id, "item", v)}
-                    // Filled in (auto-matched or manually chosen) always
-                    // reads as certain regardless of the original reading
-                    // confidence -- a real code was actually picked, unlike
-                    // the other fields which just carry the raw extraction.
-                    tier={item.item ? "certain" : itemFieldTier(confidences, index, "item", item.confidence)}
-                  />
-                </div>
                 <div style={{ width: 76 }}>
                   <Field
                     label="Amount"
@@ -568,14 +581,6 @@ export default function VerificationForm({
                     tier={itemFieldTier(confidences, index, "amount", item.confidence)}
                   />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => deleteItem(item.id)}
-                  aria-label="Delete item"
-                  style={deleteIconButtonStyle}
-                >
-                  ×
-                </button>
               </div>
 
               {!item.item &&
@@ -598,17 +603,32 @@ export default function VerificationForm({
                 </div>
               )}
 
-              <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "flex-end", flexWrap: "wrap" }}>
                 <div style={{ width: 76 }}>
                   <Field label="Rate" value={item.rate} onChange={() => {}} readOnly />
                 </div>
-                <SelectField
-                  label="Class"
-                  value={item.class}
-                  options={CLASS_OPTIONS}
-                  onChange={(v) => updateItem(item.id, "class", v)}
-                  tier={itemFieldTier(confidences, index, "class", item.confidence)}
-                />
+                <div style={{ width: 90 }}>
+                  <Field
+                    label="Item Code"
+                    value={item.item}
+                    onChange={(v) => updateItem(item.id, "item", v)}
+                    // Filled in (auto-matched or manually chosen) always
+                    // reads as certain regardless of the original reading
+                    // confidence -- a real code was actually picked, unlike
+                    // the other fields which just carry the raw extraction.
+                    tier={item.item ? "certain" : itemFieldTier(confidences, index, "item", item.confidence)}
+                  />
+                </div>
+                <button type="button" onClick={() => deleteItem(item.id)} style={secondaryButtonStyle}>
+                  Remove
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleApproveItem(item.id)}
+                  style={approved ? approveButtonApprovedStyle : approveButtonPendingStyle}
+                >
+                  {approved ? "✓ Approved" : "Approve"}
+                </button>
               </div>
             </div>
           );
@@ -631,11 +651,19 @@ export default function VerificationForm({
         tier={topTier(confidences, "terms")}
       />
 
+      {!allItemsApproved && (
+        <p style={{ fontSize: 12, color: "#b8860b", margin: 0 }}>Approve every item above before saving.</p>
+      )}
+
       <div style={{ display: "flex", gap: 12 }}>
         <button onClick={onRetake} disabled={saving} style={secondaryButtonStyle}>
           {onRetakeLabel}
         </button>
-        <button onClick={handleConfirmClick} disabled={saving} style={{ ...primaryButtonStyle, flex: 1 }}>
+        <button
+          onClick={handleConfirmClick}
+          disabled={saving || !allItemsApproved}
+          style={{ ...primaryButtonStyle, flex: 1, ...(!allItemsApproved ? disabledButtonStyle : null) }}
+        >
           {saving && <Spinner />}
           {saving ? "Saving…" : confirmLabel}
         </button>
@@ -739,42 +767,6 @@ function Field({
   );
 }
 
-function SelectField({
-  label,
-  value,
-  options,
-  onChange,
-  tier = "certain",
-}: {
-  label: string;
-  value: string;
-  options: string[];
-  onChange: (value: string) => void;
-  tier?: ConfidenceTier;
-}) {
-  return (
-    <label
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 4,
-        flex: 1,
-        fontSize: 13,
-        color: tierColor[tier],
-      }}
-    >
-      {label}
-      <select value={value} onChange={(e) => onChange(e.target.value)} style={{ ...selectStyle, ...tierInputStyle(tier) }}>
-        <option value="">—</option>
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
 
 const fieldLabelStyle: React.CSSProperties = {
   fontSize: 13,
@@ -859,17 +851,30 @@ const chipButtonStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const deleteIconButtonStyle: React.CSSProperties = {
-  width: 34,
-  height: 42,
-  fontSize: 18,
-  lineHeight: 1,
+// Deliberately not reusing tierColor's amber -- approval is a separate
+// review-workflow state from field-confidence coloring, even though it
+// uses the same "yellow means pending, not wrong" visual language Kareem
+// asked for (2026-08-17): pending = amber, approved = green with a tick.
+const approveButtonPendingStyle: React.CSSProperties = {
+  padding: "10px 14px",
+  fontSize: 14,
   borderRadius: 6,
-  border: "1px solid #b00020",
-  background: "#fff",
-  color: "#b00020",
+  border: "1px solid #b8860b",
+  background: "#b8860b",
+  color: "#fff",
   cursor: "pointer",
-  flexShrink: 0,
+  fontWeight: 600,
+};
+
+const approveButtonApprovedStyle: React.CSSProperties = {
+  ...approveButtonPendingStyle,
+  border: "1px solid #2e7d32",
+  background: "#2e7d32",
+};
+
+const disabledButtonStyle: React.CSSProperties = {
+  opacity: 0.5,
+  cursor: "not-allowed",
 };
 
 const toggleButtonStyle: React.CSSProperties = {
