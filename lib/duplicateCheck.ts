@@ -20,6 +20,10 @@ export interface ExistingOrderSummary {
   customer: string;
   date: string;
   items: ExistingOrderItem[];
+  // Filled in by /api/check-duplicate from the Photo Log tab -- the
+  // save-time checkDuplicateSlip path below leaves this unset, since the
+  // post-save screen already has its own photo link.
+  photoLink?: string;
 }
 
 export interface DuplicateCheckResult {
@@ -33,6 +37,7 @@ export interface DuplicateCheckResult {
 // Number(3), AR NO.(4), Terms(5), Memo(6), Class(7), QTY(8), Invoice
 // Class(9), Item(10), Description(11), Rate(12), Amount(13), Waitress(14)
 const NAME_COL = 0;
+const CLASS_COL = 1;
 const DATE_COL = 2;
 const SLIP_NUM_COL = 3;
 const AR_COL = 4;
@@ -43,23 +48,41 @@ const RATE_COL = 12;
 const AMOUNT_COL = 13;
 
 /**
- * A physical order slip number should never appear twice. If it's already
- * in the sheet with identical data, this is a re-scan of the same slip —
- * skip it silently. If it's already there with *different* data, that's a
- * real conflict worth a human's attention, not something to guess about.
- *
- * Takes already-fetched Sales Orders rows rather than reading the tab
- * itself -- see lib/arNumber.ts's nextArNumberFromRows for why.
+ * Rows matching a given slip type + number. Bar and Food (Restaurant) order
+ * slips are printed on separate pads, so the same number legitimately
+ * exists once per type -- matching on number alone would wrongly flag two
+ * different real chits as duplicates of each other (real gap found
+ * 2026-08-17). Falls back to number-only when the type wasn't read, rather
+ * than silently missing a real duplicate.
  */
-export function checkDuplicateSlip(order: EditableOrder, rows: string[][]): DuplicateCheckResult {
-  const slipNumber = order.order_slip_number.trim();
-  if (!slipNumber) return { status: "none" };
+function findExistingRows(slipType: string, slipNumber: string, rows: string[][]): string[][] {
+  const type = slipType.trim();
+  return rows
+    .slice(1)
+    .filter(
+      (r) => (r[SLIP_NUM_COL] ?? "").trim() === slipNumber && (!type || (r[CLASS_COL] ?? "").trim() === type)
+    );
+}
 
-  const existingRows = rows.slice(1).filter((r) => (r[SLIP_NUM_COL] ?? "").trim() === slipNumber);
-  if (existingRows.length === 0) return { status: "none" };
+/**
+ * Looks up whether a slip type + number is already recorded, without
+ * needing a full reviewed EditableOrder to compare against -- used right
+ * after OCR extraction, before the reviewer has been through the
+ * verification form (see /api/check-duplicate).
+ */
+export function findExistingOrderBySlip(
+  slipType: string,
+  slipNumber: string,
+  rows: string[][]
+): ExistingOrderSummary | null {
+  const number = slipNumber.trim();
+  if (!number) return null;
 
-  const existing: ExistingOrderSummary = {
-    slipNumber,
+  const existingRows = findExistingRows(slipType, number, rows);
+  if (existingRows.length === 0) return null;
+
+  return {
+    slipNumber: number,
     arNumber: (existingRows[0][AR_COL] ?? "").trim(),
     customer: (existingRows[0][NAME_COL] ?? "").trim(),
     date: (existingRows[0][DATE_COL] ?? "").trim(),
@@ -70,6 +93,26 @@ export function checkDuplicateSlip(order: EditableOrder, rows: string[][]): Dupl
       amount: (r[AMOUNT_COL] ?? "").trim(),
     })),
   };
+}
+
+/**
+ * A physical order slip number should never appear twice for the same slip
+ * type. If it's already in the sheet with identical data, this is a
+ * re-scan of the same slip — skip it silently. If it's already there with
+ * *different* data, that's a real conflict worth a human's attention, not
+ * something to guess about.
+ *
+ * Takes already-fetched Sales Orders rows rather than reading the tab
+ * itself -- see lib/arNumber.ts's nextArNumberFromRows for why.
+ */
+export function checkDuplicateSlip(order: EditableOrder, rows: string[][]): DuplicateCheckResult {
+  const slipNumber = order.order_slip_number.trim();
+  if (!slipNumber) return { status: "none" };
+
+  const existingRows = findExistingRows(order.slip_type, slipNumber, rows);
+  if (existingRows.length === 0) return { status: "none" };
+
+  const existing = findExistingOrderBySlip(order.slip_type, slipNumber, rows)!;
 
   const differences: string[] = [];
 

@@ -33,14 +33,24 @@ export default function Home() {
   // switches the UI to the "already exists" screen (see handleUpdateExisting)
   // instead of the normal verification form.
   const [existingOrder, setExistingOrder] = useState<ExistingOrderSummary | null>(null);
+  // Set right after OCR extraction, before the verification form is shown,
+  // if the scanned slip type + number already has a record -- switches the
+  // UI to the "Slip Already Recorded" screen (Kareem, 2026-08-17). A
+  // separate state from existingOrder above: that one only ever fires
+  // *after* a save attempt (using the reviewer's edited data), this one
+  // fires immediately off the raw OCR read, before any review has happened.
+  const [duplicateSlip, setDuplicateSlip] = useState<ExistingOrderSummary | null>(null);
   const [savedOrder, setSavedOrder] = useState<EditableOrder | null>(null);
   const [savedPhotoLink, setSavedPhotoLink] = useState<string | null>(null);
   const [photoWarning, setPhotoWarning] = useState<string | null>(null);
-  // Non-null while re-opening the form to edit an order that was already
-  // saved (rather than a fresh scan) -- see handleEditSaved. Holds the
-  // slip number, not AR number -- the chit's own printed number is always
-  // unique (Kareem, 2026-08-16) and, unlike AR number, present even on
-  // legacy rows that predate this app.
+  // Non-null while the verification form should replace an existing record
+  // on save rather than append a new one -- either re-opening the form to
+  // edit an order that was already saved this session (see
+  // handleEditSaved), or proceeding past the "Slip Already Recorded"
+  // screen to update it with fresh OCR data (see handleProceedToUpdate).
+  // Holds the slip number, not AR number -- the chit's own printed number
+  // is always unique (Kareem, 2026-08-16) and, unlike AR number, present
+  // even on legacy rows that predate this app.
   const [editingSlipNumber, setEditingSlipNumber] = useState<string | null>(null);
   const [deleteStatus, setDeleteStatus] = useState<"idle" | "deleting" | "deleted" | "error">("idle");
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -63,6 +73,7 @@ export default function Home() {
     setSaveStatus("idle");
     setSaveError(null);
     setExistingOrder(null);
+    setDuplicateSlip(null);
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -82,6 +93,7 @@ export default function Home() {
     setSaveStatus("idle");
     setSaveError(null);
     setExistingOrder(null);
+    setDuplicateSlip(null);
     setImageDataUrl(lastImageDataUrl);
   }
 
@@ -90,6 +102,7 @@ export default function Home() {
     setStatus("loading");
     setError(null);
     setExtraction(null);
+    setDuplicateSlip(null);
 
     try {
       const resizedForApi = await resizeImage(imageDataUrl);
@@ -109,6 +122,27 @@ export default function Home() {
       setExtraction(data.extraction);
       setItemTemplate(data.itemTemplate ?? []);
       setStatus("idle");
+
+      // Check for an existing record under this exact slip type + number
+      // right away, before the reviewer goes through the whole
+      // verification form -- best-effort: if this lookup itself fails, the
+      // save-time duplicate check further down still catches it.
+      const slipNumber = (data.extraction?.order_slip_number ?? "").trim();
+      if (slipNumber) {
+        try {
+          const dupRes = await fetch("/api/check-duplicate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ slipType: data.extraction.slip_type, slipNumber }),
+          });
+          const dupData = await dupRes.json();
+          if (dupData.ok && dupData.existing) {
+            setDuplicateSlip(dupData.existing);
+          }
+        } catch {
+          // Best-effort -- see comment above.
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setStatus("error");
@@ -121,6 +155,7 @@ export default function Home() {
     setSaveError(null);
     setPendingOrder(null);
     setExistingOrder(null);
+    setDuplicateSlip(null);
     setSavedOrder(null);
     setSavedPhotoLink(null);
     setPhotoWarning(null);
@@ -225,6 +260,16 @@ export default function Home() {
     handleConfirm(pendingOrder, existingOrder.slipNumber);
   }
 
+  // From the "Slip Already Recorded" screen -- proceeds into the normal
+  // verification form using the fresh OCR extraction (already held in
+  // `extraction`), with editingSlipNumber set so the eventual save replaces
+  // the existing record instead of appending a new one.
+  function handleProceedToUpdate() {
+    if (!duplicateSlip) return;
+    setEditingSlipNumber(duplicateSlip.slipNumber);
+    setDuplicateSlip(null);
+  }
+
   return (
     <main
       style={{
@@ -309,7 +354,31 @@ export default function Home() {
         </>
       )}
 
-      {extraction && !existingOrder && saveStatus !== "success" && (
+      {duplicateSlip && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <h2 style={{ fontSize: 18 }}>Slip Already Recorded</h2>
+          <p style={{ color: "#8a6d00" }}>
+            Slip #{duplicateSlip.slipNumber} is already in the sheet
+            {duplicateSlip.arNumber ? ` (as ${duplicateSlip.arNumber})` : ""}.
+          </p>
+          <ExistingOrderRecap order={duplicateSlip} />
+          {duplicateSlip.photoLink && (
+            <a href={duplicateSlip.photoLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13 }}>
+              View photo of recorded chit
+            </a>
+          )}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button onClick={handleProceedToUpdate} style={{ ...buttonStyle, flex: 1 }}>
+              Update Record
+            </button>
+            <button onClick={handleRetake} style={secondaryButtonStyle}>
+              Return to Home Page
+            </button>
+          </div>
+        </div>
+      )}
+
+      {extraction && !duplicateSlip && !existingOrder && saveStatus !== "success" && (
         <>
           {saveStatus === "error" && <p style={{ color: "#b00020" }}>Save failed: {saveError}</p>}
           <VerificationForm
