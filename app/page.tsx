@@ -6,6 +6,7 @@ import type { OrderSlipExtraction } from "@/lib/extractSchema";
 import type { ItemCodeEntry } from "@/lib/itemCodeScoring";
 import type { ExistingOrderSummary } from "@/lib/duplicateCheck";
 import VerificationForm, { type EditableOrder } from "@/components/VerificationForm";
+import { Spinner } from "@/components/Spinner";
 import { loadLastPhoto, saveLastPhoto } from "@/lib/lastPhotoStore";
 import { resizeImage } from "@/lib/resizeImage";
 
@@ -334,6 +335,7 @@ export default function Home() {
                 disabled={saveStatus === "saving"}
                 style={{ ...buttonStyle, flex: 1 }}
               >
+                {saveStatus === "saving" && <Spinner />}
                 {saveStatus === "saving" ? "Updating…" : "Update Record"}
               </button>
             )}

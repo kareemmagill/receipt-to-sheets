@@ -1,4 +1,3 @@
-import { readTab } from "./googleSheets";
 import type { EditableOrder } from "@/components/VerificationForm";
 
 export interface ExistingOrderItem {
@@ -44,12 +43,14 @@ const AMOUNT_COL = 13;
  * in the sheet with identical data, this is a re-scan of the same slip —
  * skip it silently. If it's already there with *different* data, that's a
  * real conflict worth a human's attention, not something to guess about.
+ *
+ * Takes already-fetched Sales Orders rows rather than reading the tab
+ * itself -- see lib/arNumber.ts's nextArNumberFromRows for why.
  */
-export async function checkDuplicateSlip(order: EditableOrder): Promise<DuplicateCheckResult> {
+export function checkDuplicateSlip(order: EditableOrder, rows: string[][]): DuplicateCheckResult {
   const slipNumber = order.order_slip_number.trim();
   if (!slipNumber) return { status: "none" };
 
-  const rows = await readTab("Sales Orders");
   const existingRows = rows.slice(1).filter((r) => (r[SLIP_NUM_COL] ?? "").trim() === slipNumber);
   if (existingRows.length === 0) return { status: "none" };
 

@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { OrderSlipExtraction, OrderSlipItem } from "@/lib/extractSchema";
 import { makeId } from "@/lib/makeId";
 import { matchItemCodeCandidates, ITEM_MATCH_CONFIDENT_THRESHOLD, type ItemCodeEntry } from "@/lib/itemCodeScoring";
+import { Spinner } from "@/components/Spinner";
 
 export type EditableItem = OrderSlipItem & { id: string };
 export type EditableOrder = Omit<OrderSlipExtraction, "items" | "uncertain_fields" | "overall_confidence"> & {
@@ -591,6 +592,7 @@ export default function VerificationForm({
           {onRetakeLabel}
         </button>
         <button onClick={handleConfirmClick} disabled={saving} style={{ ...primaryButtonStyle, flex: 1 }}>
+          {saving && <Spinner />}
           {saving ? "Saving…" : confirmLabel}
         </button>
       </div>

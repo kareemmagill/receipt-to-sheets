@@ -1,16 +1,16 @@
-import { readTab } from "./googleSheets";
-
 // Column E (0-indexed 4) in Sales Orders: AR NO.
 const AR_COLUMN_INDEX = 4;
 
 /**
  * AR numbers are assigned automatically, not read off the slip — this finds
- * the highest existing "AR####" in the sheet and returns the next one,
- * matching the zero-padding width already in use.
+ * the highest existing "AR####" in the given Sales Orders rows and returns
+ * the next one, matching the zero-padding width already in use.
+ *
+ * Takes already-fetched rows rather than reading the tab itself, so a
+ * caller that also needs the sheet for other checks (e.g. duplicate
+ * detection) can share one fetch instead of each re-reading the same tab.
  */
-export async function getNextArNumber(): Promise<string> {
-  const rows = await readTab("Sales Orders");
-
+export function nextArNumberFromRows(rows: string[][]): string {
   let maxNum = 0;
   let width = 4;
 

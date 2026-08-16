@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
-import { appendRows, ensureTabExists } from "@/lib/googleSheets";
+import { NextResponse, after } from "next/server";
+import { readTab, appendRows, ensureTabExists } from "@/lib/googleSheets";
 import { buildSalesOrderRows } from "@/lib/salesOrderRows";
-import { getNextArNumber } from "@/lib/arNumber";
+import { nextArNumberFromRows } from "@/lib/arNumber";
 import { checkDuplicateSlip } from "@/lib/duplicateCheck";
 import { uploadOrderPhoto } from "@/lib/googleDrive";
 import { deleteOrderByArNumber } from "@/lib/deleteOrderByAr";
@@ -49,8 +49,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Missing customer" }, { status: 400 });
     }
 
+    // Sales Orders is read once here and shared by both the duplicate check
+    // and the AR-number computation below -- these used to each read the
+    // tab separately (two full sequential round trips for the same data),
+    // one of several redundant reads that made a save feel slow.
+    const salesOrderRows = await readTab("Sales Orders");
+
     if (!replaceArNumber) {
-      const duplicate = await checkDuplicateSlip(order);
+      const duplicate = checkDuplicateSlip(order, salesOrderRows);
       if (duplicate.status === "exact" || duplicate.status === "conflict") {
         return NextResponse.json(
           {
@@ -67,9 +73,26 @@ export async function POST(req: Request) {
 
     // Computed fresh at save time — one AR number per order, applied to
     // every row of that order.
-    const arNumber = await getNextArNumber();
+    const arNumber = nextArNumberFromRows(salesOrderRows);
     const rows = buildSalesOrderRows(order, arNumber);
-    await appendRows("Sales Orders", rows);
+
+    // The Sales Orders write and the Drive photo upload are independent of
+    // each other -- the previous version awaited them strictly in sequence
+    // (sheet write, THEN wait for the full photo upload) even though
+    // nothing requires that ordering. Running them concurrently means the
+    // save only takes as long as the slower of the two, not the sum of
+    // both -- the Drive upload is typically the slower one.
+    const customerName = order.customer_suggested || order.customer_written;
+    const [appendResult, photoResult] = await Promise.allSettled([
+      appendRows("Sales Orders", rows),
+      imageDataUrl
+        ? uploadOrderPhoto({ imageDataUrl, fileName: buildPhotoFileName(order, arNumber) })
+        : Promise.resolve(null),
+    ]);
+
+    // The Sales Orders write is the actual financial record -- unlike the
+    // photo below, a failure here must fail the whole save.
+    if (appendResult.status === "rejected") throw appendResult.reason;
 
     // Archiving the photo is a bonus, not part of the financial record — if
     // it fails, the sales order write above has already succeeded, so we
@@ -77,18 +100,24 @@ export async function POST(req: Request) {
     let photoWarning: string | undefined;
     let photoLink: string | undefined;
     if (imageDataUrl) {
-      try {
-        const customerName = order.customer_suggested || order.customer_written;
-        const fileName = buildPhotoFileName(order, arNumber);
-        const { webViewLink } = await uploadOrderPhoto({ imageDataUrl, fileName });
-        photoLink = webViewLink;
-
-        await ensureTabExists(PHOTO_LOG_TAB, PHOTO_LOG_HEADER);
-        await appendRows(PHOTO_LOG_TAB, [
-          [arNumber, order.order_slip_number, customerName, new Date().toISOString(), webViewLink],
-        ]);
-      } catch (err) {
-        photoWarning = err instanceof Error ? err.message : String(err);
+      if (photoResult.status === "rejected") {
+        photoWarning = photoResult.reason instanceof Error ? photoResult.reason.message : String(photoResult.reason);
+      } else if (photoResult.value) {
+        photoLink = photoResult.value.webViewLink;
+        // The Photo Log row is an internal audit trail, not something the
+        // UI waits on (it only needs photoLink, already set above) -- runs
+        // after the response goes out so it doesn't add to the wait.
+        const webViewLink = photoResult.value.webViewLink;
+        after(async () => {
+          try {
+            await ensureTabExists(PHOTO_LOG_TAB, PHOTO_LOG_HEADER);
+            await appendRows(PHOTO_LOG_TAB, [
+              [arNumber, order.order_slip_number, customerName, new Date().toISOString(), webViewLink],
+            ]);
+          } catch {
+            // Best-effort log row; nothing user-facing depends on it.
+          }
+        });
       }
     }
 
