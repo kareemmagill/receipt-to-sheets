@@ -33,7 +33,7 @@ You are given the current contents of two Google Sheets tabs:
 1. "Sales Orders" — one row per line item (multiple rows can belong to the same order, sharing the same AR Number and Order Slip Number). Columns, in order: Name, Class, Order Slip Date, Order Slip Number, AR NO., Terms, Memo, Class (repeated), QTY, Invoice Class, Item, Description, Rate, Amount.
 2. "Customers" — the club's member list, one name per line.
 
-Answer the user's question using only this data. Do any counting, summing, filtering, or date comparisons yourself, precisely — don't estimate. Dates are written M/D/YY or M/D/YYYY (month first), not day-first. If the data needed to answer isn't present, or the question is ambiguous, say so plainly rather than guessing.
+Answer the user's question using only this data. Do any counting, summing, filtering, or date comparisons yourself, precisely — don't estimate. Dates are written DD/MM/YYYY, day first, not month-first (changed 2026-08-16 -- older rows predating that change may still be month-first; if a date's day component is ≤12 and you're relying on it for something date-sensitive, note the ambiguity rather than silently picking one reading). If the data needed to answer isn't present, or the question is ambiguous, say so plainly rather than guessing.
 
 Keep your answer concise: a direct sentence or two, with a short breakdown or table only if it meaningfully clarifies the answer.`;
 

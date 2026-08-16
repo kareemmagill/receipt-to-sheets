@@ -1,6 +1,6 @@
 import { NextResponse, after } from "next/server";
 import { readTab, appendRows, ensureTabExists } from "@/lib/googleSheets";
-import { buildSalesOrderRows } from "@/lib/salesOrderRows";
+import { buildSalesOrderRows, mostRecentOrderDate } from "@/lib/salesOrderRows";
 import { nextArNumberFromRows } from "@/lib/arNumber";
 import { checkDuplicateSlip } from "@/lib/duplicateCheck";
 import { uploadOrderPhoto } from "@/lib/googleDrive";
@@ -74,7 +74,7 @@ export async function POST(req: Request) {
     // Computed fresh at save time — one AR number per order, applied to
     // every row of that order.
     const arNumber = nextArNumberFromRows(salesOrderRows);
-    const rows = buildSalesOrderRows(order, arNumber);
+    const rows = buildSalesOrderRows(order, arNumber, mostRecentOrderDate(salesOrderRows));
 
     // The Sales Orders write and the Drive photo upload are independent of
     // each other -- the previous version awaited them strictly in sequence
