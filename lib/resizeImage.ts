@@ -1,18 +1,21 @@
 // Client-only. Downscales an image data URL so its longest edge is at most
-// maxDimension, preserving aspect ratio. Claude's vision API prices images
-// by pixel dimensions (not file size) and auto-downsamples anything above
-// ~1568px on the long edge internally -- so sending a full-resolution phone
-// photo (often 3000-4000px+) spends tokens on detail the model never uses.
-// Only used for the copy sent to /api/extract -- the original, full-
-// resolution data URL is kept in state for display and for the photo
-// archived to Google Drive on save, so this never degrades the permanent
-// record, only what's billed for reading it.
+// maxDimension, preserving aspect ratio. Two callers, two different caps:
+// the copy sent to /api/extract uses the default 1568px, matching Claude's
+// vision API internal downsampling (pricing is by pixel dimensions, so a
+// full-res phone photo of 3000-4000px+ just spends tokens on detail the
+// model never uses); the copy sent to /api/save for Drive archiving uses a
+// larger cap (see call sites) -- full-resolution originals (often 4-8MB+ as
+// base64) were silently failing that save with a platform-level "Request
+// Entity Too Large" response the client couldn't even parse as JSON (found
+// 2026-08-16, in real use). The on-screen preview still shows the true
+// original, held separately in state -- only the two network payloads are
+// downsized.
 //
 // Images already at or under the cap are returned unchanged (no upscaling,
 // no re-compressing an already-small photo). Falls back to the original on
 // any failure (unsupported canvas, decode error) rather than blocking the
-// scan.
-export async function resizeForVisionApi(dataUrl: string, maxDimension = 1568): Promise<string> {
+// scan -- callers should still expect the odd oversized upload to fail.
+export async function resizeImage(dataUrl: string, maxDimension = 1568): Promise<string> {
   try {
     const img = await loadImage(dataUrl);
     if (img.width <= maxDimension && img.height <= maxDimension) {

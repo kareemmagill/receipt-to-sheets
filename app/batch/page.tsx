@@ -5,7 +5,12 @@ import Link from "next/link";
 import { makeId } from "@/lib/makeId";
 import type { OrderSlipExtraction } from "@/lib/extractSchema";
 import type { EditableOrder } from "@/components/VerificationForm";
-import { resizeForVisionApi } from "@/lib/resizeImage";
+import { resizeImage } from "@/lib/resizeImage";
+
+// See app/page.tsx for why the archived copy is downsized too, not just
+// the OCR-read copy -- the full-resolution original was silently failing
+// /api/save with an unparseable platform error.
+const ARCHIVAL_MAX_DIMENSION = 2200;
 
 interface QueuedPhoto {
   id: string;
@@ -73,7 +78,7 @@ export default function BatchImportPage() {
     for (const photo of photos) {
       setResult(photo.id, "processing", "Reading slip…");
       try {
-        const resizedForApi = await resizeForVisionApi(photo.dataUrl);
+        const resizedForApi = await resizeImage(photo.dataUrl);
         const extractRes = await fetch("/api/extract", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -95,10 +100,11 @@ export default function BatchImportPage() {
           continue;
         }
 
+        const archivalImage = await resizeImage(photo.dataUrl, ARCHIVAL_MAX_DIMENSION);
         const saveRes = await fetch("/api/save", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ order, imageDataUrl: photo.dataUrl }),
+          body: JSON.stringify({ order, imageDataUrl: archivalImage }),
         });
         const saveData = await saveRes.json();
         if (saveData.exists) {

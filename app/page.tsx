@@ -7,7 +7,13 @@ import type { ItemCodeEntry } from "@/lib/itemCodeScoring";
 import type { ExistingOrderSummary } from "@/lib/duplicateCheck";
 import VerificationForm, { type EditableOrder } from "@/components/VerificationForm";
 import { loadLastPhoto, saveLastPhoto } from "@/lib/lastPhotoStore";
-import { resizeForVisionApi } from "@/lib/resizeImage";
+import { resizeImage } from "@/lib/resizeImage";
+
+// Cap for the copy archived to Google Drive on save -- generous enough to
+// stay legible (well above the 1568px OCR-read copy) while keeping the
+// base64 payload comfortably under Vercel's request body limit, which the
+// true full-resolution original was silently exceeding.
+const ARCHIVAL_MAX_DIMENSION = 2200;
 
 export default function Home() {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -83,7 +89,7 @@ export default function Home() {
     setExtraction(null);
 
     try {
-      const resizedForApi = await resizeForVisionApi(imageDataUrl);
+      const resizedForApi = await resizeImage(imageDataUrl);
       const res = await fetch("/api/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -169,15 +175,18 @@ export default function Home() {
     setPendingOrder(order);
 
     try {
+      // Re-saving an already-archived photo would just duplicate it in
+      // Drive for no benefit -- the physical chit hasn't changed, only the
+      // extracted data has.
+      const archivalImage =
+        !replaceArNumber && imageDataUrl ? await resizeImage(imageDataUrl, ARCHIVAL_MAX_DIMENSION) : undefined;
+
       const res = await fetch("/api/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           order,
-          // Re-saving an already-archived photo would just duplicate it in
-          // Drive for no benefit -- the physical chit hasn't changed, only
-          // the extracted data has.
-          imageDataUrl: replaceArNumber ? undefined : imageDataUrl,
+          imageDataUrl: archivalImage,
           replaceArNumber,
         }),
       });
