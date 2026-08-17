@@ -436,19 +436,19 @@ export default function Home() {
           {!imageDataUrl && SAMPLE_SLIPS.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%", minWidth: 0 }}>
               <span style={{ fontSize: 15, color: "#555" }}>No slip on hand? Try a sample:</span>
-              <div style={{ display: "flex", gap: 8, overflowX: "auto", width: "100%", minWidth: 0 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, width: "100%", minWidth: 0 }}>
                 {SAMPLE_SLIPS.map((sample) => (
                   <button
                     key={sample.file}
                     type="button"
                     onClick={() => handleUseSample(sample.file)}
-                    style={{ padding: 0, border: "1px solid #ccc", borderRadius: 8, background: "none", cursor: "pointer", flexShrink: 0 }}
+                    style={{ padding: 0, border: "1px solid #ccc", borderRadius: 8, background: "none", cursor: "pointer" }}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={sample.file}
                       alt={sample.label}
-                      style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 7, display: "block" }}
+                      style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 7, display: "block" }}
                     />
                   </button>
                 ))}
