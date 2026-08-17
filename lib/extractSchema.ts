@@ -96,6 +96,15 @@ export interface OrderSlipItem {
   amount: string;
   confidence: number;
   class: string; // "Restaurant" | "Bar" | "" — derived server-side per item
+  // The model's raw reading, frozen at extraction time and never touched
+  // again -- description above can get overwritten with a clean canonical
+  // name when the reviewer picks a candidate chip (e.g. "extra rice" ->
+  // "Rice"), which is good for the sheet's readability but would otherwise
+  // erase the exact handwriting that needs remembering for next time. Kept
+  // separately so lib/itemCorrections.ts can still learn "extra rice" ->
+  // that item code even after description itself gets cleaned up (Kareem,
+  // 2026-08-17). Empty for manually added items with no OCR behind them.
+  original_description: string;
   // Best-guess Inventory matches for this line — filled in server-side, not
   // part of what the vision model returns.
   candidates?: { description: string; itemCode: string; score: number }[];

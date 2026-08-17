@@ -212,6 +212,7 @@ export async function POST(req: Request) {
         invoice_class: itemClass,
         item: codeMatch ? codeMatch.entry.itemCode : "",
         description,
+        original_description: description,
         rate: deriveRate(amount, qty),
         amount,
         confidence: item.confidence ?? 0,

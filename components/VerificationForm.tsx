@@ -139,6 +139,7 @@ function emptyItem(): EditableItem {
     invoice_class: "",
     item: "",
     description: "",
+    original_description: "",
     rate: "",
     amount: "",
     confidence: 1,

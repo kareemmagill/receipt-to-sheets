@@ -1,9 +1,10 @@
 import type { ItemCodeEntry } from "./itemCodeScoring";
 
-// Sales Orders columns: ... Item(10), Description(11) ... -- see
-// lib/duplicateCheck.ts for the full layout.
+// Sales Orders columns: ... Item(10), Description(11) ... Original
+// Description(19) -- see lib/salesOrderRows.ts for the full layout.
 const ITEM_COL = 10;
 const DESC_COL = 11;
+const ORIGINAL_DESC_COL = 19;
 
 /**
  * Past (written description -> confirmed item code) pairs from real saved
@@ -18,6 +19,15 @@ const DESC_COL = 11;
  * the same handwriting scores 1.0 against its own past correction, well
  * above the confident-match threshold.
  *
+ * Learns from both Description and Original Description -- picking a
+ * candidate chip cleans up Description to the canonical name (e.g. "extra
+ * rice" -> "Rice"), which is what you want on the sheet but would erase
+ * the actual handwriting this needs to remember; Original Description
+ * (added 2026-08-17) is frozen at extraction time and never touched
+ * again, so "extra rice" -> that item code still gets learned even though
+ * the visible Description no longer says that. Rows saved before that
+ * column existed just contribute their Description as before.
+ *
  * Last save wins when a description has been paired with more than one
  * code over time (Sales Orders rows are in sheet order, oldest first, so
  * later entries overwrite earlier ones here) -- the most recent human
@@ -30,11 +40,14 @@ export function itemCorrectionsFromRows(rows: string[][]): ItemCodeEntry[] {
   const byDescription = new Map<string, string>();
 
   for (const row of rows.slice(1)) {
-    const description = (row[DESC_COL] ?? "").trim();
     const itemCode = (row[ITEM_COL] ?? "").trim();
-    if (description && itemCode) {
-      byDescription.set(description, itemCode);
-    }
+    if (!itemCode) continue;
+
+    const description = (row[DESC_COL] ?? "").trim();
+    if (description) byDescription.set(description, itemCode);
+
+    const originalDescription = (row[ORIGINAL_DESC_COL] ?? "").trim();
+    if (originalDescription) byDescription.set(originalDescription, itemCode);
   }
 
   return [...byDescription.entries()].map(([salesDesc, itemCode]) => ({

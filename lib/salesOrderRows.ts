@@ -5,15 +5,22 @@ export { mostRecentOrderDate } from "./dateNormalize";
 // Matches the real Sales Orders header row exactly: Name, Class, Order Slip
 // Date, Order Slip Number, AR NO. , Terms, Memo, Class, QTY, Invoice Class,
 // Item, Description, Rate, Amount, Waitress, Member Status, Entered At,
-// Entered By, Device (Waitress and Member Status added 2026-08-15 as the
-// 15th/16th columns; Entered At/By/Device added 2026-08-17 as the
-// 17th-19th -- each appended rather than inserted among the existing
-// ones, so nothing that reads this sheet by position gets shifted) — with
-// the Class column appearing twice (B and H). Class is per-item
-// (Restaurant or Bar, depending on the item), not per-order, so rows for
-// the same order can carry different Class values. Memo holds only the
-// slip's own memo/note text now -- Waitress used to be folded into it (no
-// column of its own existed yet) but that's no longer needed.
+// Entered By, Device, Original Description (Waitress and Member Status
+// added 2026-08-15 as the 15th/16th columns; Entered At/By/Device added
+// 2026-08-17 as the 17th-19th; Original Description added 2026-08-17 as
+// the 20th -- each appended rather than inserted among the existing ones,
+// so nothing that reads this sheet by position gets shifted) — with the
+// Class column appearing twice (B and H). Class is per-item (Restaurant
+// or Bar, depending on the item), not per-order, so rows for the same
+// order can carry different Class values. Memo holds only the slip's own
+// memo/note text now -- Waitress used to be folded into it (no column of
+// its own existed yet) but that's no longer needed. Original Description
+// is the model's raw, never-edited reading of that line -- kept separate
+// from Description (which can get cleaned up to a canonical name when the
+// reviewer picks a candidate chip) purely so lib/itemCorrections.ts can
+// keep matching the exact handwriting it originally saw, even after the
+// visible Description no longer says that (Kareem, 2026-08-17: "extra
+// rice" -> Rice should still auto-match "extra rice" next time).
 // A leading apostrophe tells Sheets' USER_ENTERED parser to store the value
 // as literal text instead of auto-parsing it — without this, a date-looking
 // string like "8/27/25" gets converted into a date serial number, which
@@ -59,5 +66,6 @@ export function buildSalesOrderRows(
     enteredAt,
     enteredBy,
     device,
+    item.original_description,
   ]);
 }
