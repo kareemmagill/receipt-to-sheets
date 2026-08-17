@@ -163,6 +163,36 @@ export async function deleteDataRows(tabName: string, startRow: number, endRow: 
   });
 }
 
+// Deletes a set of individual, possibly non-adjacent rows in one API call.
+// rowNumbers are 1-indexed sheet row numbers, same convention as
+// deleteDataRows above; also refuses row 1. Requests within one
+// batchUpdate apply in order against the sheet as it's progressively
+// mutated by earlier requests in the same call, so deleting
+// highest-row-number first means each later request's row number is still
+// valid when it runs -- an earlier delete can never shift a row this
+// function hasn't gotten to yet.
+export async function deleteDataRowsAt(tabName: string, rowNumbers: number[]) {
+  if (!SHEET_ID) throw new Error("Missing GOOGLE_SHEET_ID env var");
+  if (rowNumbers.some((r) => r < 2)) {
+    throw new Error(`Refusing to delete rows ${JSON.stringify(rowNumbers)} (must all be >= 2)`);
+  }
+  if (rowNumbers.length === 0) return;
+
+  const sheetId = await getSheetId(tabName);
+  const sheets = getSheetsClient();
+  const descending = [...rowNumbers].sort((a, b) => b - a);
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    requestBody: {
+      requests: descending.map((rowNumber) => ({
+        deleteDimension: {
+          range: { sheetId, dimension: "ROWS", startIndex: rowNumber - 1, endIndex: rowNumber },
+        },
+      })),
+    },
+  });
+}
+
 // Creates a new tab with a header row if one matching this name doesn't
 // already exist. Used for auxiliary tabs the app manages itself (e.g. the
 // photo log) — never for the existing Sales Orders / Customers / etc. tabs,
