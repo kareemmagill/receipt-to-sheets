@@ -203,6 +203,14 @@ export default function VerificationForm({
     order.customer_suggested ? "select" : order.customer_written ? "select" : "manual"
   );
   const [customerError, setCustomerError] = useState<string | null>(null);
+  // Walk-in name suggestions only show once the reviewer is actually
+  // typing in the field, not pre-populated on load (Kareem, 2026-08-17) --
+  // a clear OCR read is trustworthy on its own, even for a name never
+  // seen before; showing past-name chips (or worse, silently substituting
+  // one in) unprompted risks nudging toward an unrelated past name that
+  // just happens to share a few letters (real bug: OCR clearly read
+  // "Martin", the app suggested "Ms Lin" instead).
+  const [walkInFieldTyped, setWalkInFieldTyped] = useState(false);
   // "select" only when the read name is already a known waitress -- unlike
   // customer_suggested (only ever a confident match or empty, by
   // construction of the extract API), extraction.waitress can legitimately
@@ -248,14 +256,15 @@ export default function VerificationForm({
     .sort((a, b) => a.localeCompare(b));
 
   // Walk-in suggestions -- always sourced from past walk-ins only, never
-  // the Customers/Members list, and read live off order.member_status so
-  // correcting the toggle after the fact immediately drops any stale
-  // member-sourced suggestions.
-  const likelyWalkIns = (extraction.walkin_matches ?? []).filter((m) => m.score >= 0.3);
-  const likelyWalkInNames = new Set(likelyWalkIns.map((m) => m.name));
-  const otherWalkIns = (extraction.walkin_list ?? [])
-    .filter((name) => !likelyWalkInNames.has(name))
-    .sort((a, b) => a.localeCompare(b));
+  // the Customers/Members list. Live-filtered by what's actually typed
+  // (only once typing has started -- see walkInFieldTyped above), not a
+  // static pre-scored list against the original OCR read, since that read
+  // itself is now what customer_suggested already defaults to.
+  const walkInQuery = order.customer_suggested.trim().toLowerCase();
+  const walkInSuggestions =
+    walkInFieldTyped && walkInQuery
+      ? (extraction.walkin_list ?? []).filter((name) => name.toLowerCase().includes(walkInQuery))
+      : [];
 
   // Kareem (2026-08-15): there are few enough waitresses that the whole
   // known list is worth showing, not just close matches.
@@ -453,6 +462,7 @@ export default function VerificationForm({
               onChange={(e) => {
                 updateField("customer_suggested", e.target.value);
                 setCustomerError(null);
+                setWalkInFieldTyped(true);
               }}
               placeholder="Type walk-in guest's name"
               style={{ ...inputStyle, ...tierInputStyle(customerTier) }}
@@ -508,9 +518,9 @@ export default function VerificationForm({
             </div>
           )}
 
-          {order.member_status === "Non-Member" && (likelyWalkIns.length > 0 || otherWalkIns.length > 0) && (
+          {order.member_status === "Non-Member" && walkInSuggestions.length > 0 && (
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {[...likelyWalkIns.map((m) => m.name), ...otherWalkIns].slice(0, 8).map((name) => (
+              {walkInSuggestions.slice(0, 8).map((name) => (
                 <button
                   key={name}
                   type="button"

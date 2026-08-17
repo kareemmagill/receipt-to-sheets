@@ -272,12 +272,12 @@ export async function POST(req: Request) {
     }
 
     try {
+      // No fuzzy matching against customer_written here -- the reviewer
+      // gets suggestions only once they're actually typing (client-side
+      // substring filter against this list, see walkInFieldTyped in
+      // components/VerificationForm.tsx), not from the original OCR read.
       extraction.walkin_list = walkInNamesFromRows(salesOrderRows);
-      if (extraction.customer_written) {
-        extraction.walkin_matches = matchCustomer(extraction.customer_written, extraction.walkin_list);
-      }
     } catch {
-      extraction.walkin_matches = [];
       extraction.walkin_list = [];
     }
 
@@ -285,9 +285,18 @@ export async function POST(req: Request) {
     // if member_status is corrected afterward (the suggestion list the
     // form shows does update live; see components/VerificationForm.tsx).
     if (memberStatus === "Non-Member") {
-      const matches = extraction.walkin_matches ?? [];
-      extraction.customer_suggested =
-        matches[0] && matches[0].score >= CUSTOMER_MATCH_THRESHOLD ? matches[0].name : extraction.customer_written;
+      // Always the raw reading, never substituted with a fuzzy-matched
+      // past walk-in -- a walk-in isn't a fixed roster, so a clear OCR
+      // read is trustworthy even for a name never seen before. Matching
+      // loosely against past names here was overriding a clean read with
+      // an unrelated one that just happened to share a few letters (real
+      // bug, Kareem, 2026-08-17: OCR clearly read "Martin", this
+      // auto-suggested "Ms Lin" instead -- crude edit-distance similarity
+      // alone scored that a coincidental 50%, above the old threshold).
+      // Past-name suggestions are still offered, but only once the
+      // reviewer is actually typing (see walkin_list/walkin_matches below
+      // and components/VerificationForm.tsx's walkInFieldTyped).
+      extraction.customer_suggested = extraction.customer_written;
     } else if (extraction.customer_written) {
       const matches = extraction.customer_matches ?? [];
       extraction.customer_suggested = matches[0] && matches[0].score >= CUSTOMER_MATCH_THRESHOLD ? matches[0].name : "";

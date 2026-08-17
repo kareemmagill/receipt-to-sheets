@@ -135,9 +135,11 @@ export interface OrderSlipExtraction {
   customer_matches?: { name: string; score: number }[];
   customer_list?: string[];
   // Past walk-in (Non-Member) names -- see lib/knownNames.ts. Never mixed
-  // with customer_matches/customer_list above; the verification form picks
-  // whichever pair matches the live member_status toggle.
-  walkin_matches?: { name: string; score: number }[];
+  // with customer_matches/customer_list above. No scored matches
+  // alongside this one (unlike customer_matches/waitress_matches) -- a
+  // walk-in isn't a fixed roster to fuzzy-match against up front; the
+  // verification form filters this list live against whatever's actually
+  // typed instead (Kareem, 2026-08-17).
   walkin_list?: string[];
   // Same self-correcting idea, for waitress_written against past waitress
   // names -- see lib/knownNames.ts.
