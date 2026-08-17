@@ -460,6 +460,12 @@ export default function Home() {
             </button>
           )}
 
+          {imageDataUrl && (
+            <button onClick={handleRetake} disabled={status === "loading"} style={secondaryButtonStyle}>
+              Return to Home Page
+            </button>
+          )}
+
           {error && <p style={{ color: "#b00020" }}>Error: {error}</p>}
         </>
       )}
