@@ -12,6 +12,7 @@ const API_USAGE_HEADER = [
   "Cache Read Tokens",
   "Cost (USD)",
 ];
+const ENDPOINT_COL = 1;
 const COST_COL = 7;
 
 /**
@@ -39,12 +40,33 @@ export async function logApiUsage(endpoint: string, model: string, usage: ApiUsa
   ]);
 }
 
-/** Running total in USD across every logged call so far. */
-export async function totalApiCost(): Promise<number> {
+export interface ApiUsageSummary {
+  totalCostUsd: number;
+  // "extract" calls specifically -- one per slip scanned (Kareem,
+  // 2026-08-18: "number of slips scanned... current price per scan").
+  // Separate from query-endpoint cost since Ask the Sales Data isn't
+  // scanning anything.
+  scanCount: number;
+  scanCostUsd: number;
+}
+
+/** Running totals across every logged call so far. */
+export async function apiUsageSummary(): Promise<ApiUsageSummary> {
   try {
     const rows = await readTab(API_USAGE_TAB);
-    return rows.slice(1).reduce((sum, row) => sum + (parseFloat(row[COST_COL]) || 0), 0);
+    let totalCostUsd = 0;
+    let scanCount = 0;
+    let scanCostUsd = 0;
+    for (const row of rows.slice(1)) {
+      const cost = parseFloat(row[COST_COL]) || 0;
+      totalCostUsd += cost;
+      if ((row[ENDPOINT_COL] ?? "").trim() === "extract") {
+        scanCount += 1;
+        scanCostUsd += cost;
+      }
+    }
+    return { totalCostUsd, scanCount, scanCostUsd };
   } catch {
-    return 0; // tab doesn't exist yet -- nothing logged
+    return { totalCostUsd: 0, scanCount: 0, scanCostUsd: 0 }; // tab doesn't exist yet -- nothing logged
   }
 }

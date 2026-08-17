@@ -14,6 +14,12 @@ import { getStoredUserName, setStoredUserName } from "@/lib/userName";
 import { SAMPLE_SLIPS } from "@/lib/sampleSlips";
 import { usePageTitle } from "@/lib/usePageTitle";
 
+// Approximate, hand-set -- there's no live exchange-rate feed wired up.
+// Anthropic bills in USD; this is purely a display conversion for
+// Kareem's own reference (2026-08-18). Update this if it drifts far from
+// the real rate.
+const USD_TO_PHP_RATE = 58;
+
 // Cap for the copy archived to Google Drive on save -- lowered from 2200
 // to 800 (Kareem, 2026-08-17) to keep uploads faster and Drive usage
 // down; still comfortably under Vercel's request body limit, which the
@@ -75,14 +81,19 @@ export default function Home() {
   const [userName, setUserName] = useState("");
   // Running estimate of what this app's Claude API calls have cost so far
   // (Kareem, 2026-08-17) -- null while loading/unavailable, in which case
-  // nothing renders rather than showing a misleading $0.00.
-  const [apiCostTotal, setApiCostTotal] = useState<number | null>(null);
+  // nothing renders rather than showing a misleading ₱0.00. scanCount/
+  // scanCostUsd cover /api/extract calls specifically (one per slip
+  // scanned), separate from totalCostUsd which also includes Ask the
+  // Sales Data's query cost -- added 2026-08-18 so the per-scan price is
+  // visible while still on the pricier model, before switching to a
+  // cheaper one later.
+  const [usage, setUsage] = useState<{ totalCostUsd: number; scanCount: number; scanCostUsd: number } | null>(null);
 
   useEffect(() => {
     fetch("/api/usage-total")
       .then((res) => res.json())
       .then((data) => {
-        if (data.ok) setApiCostTotal(data.totalUsd);
+        if (data.ok) setUsage({ totalCostUsd: data.totalCostUsd, scanCount: data.scanCount, scanCostUsd: data.scanCostUsd });
       })
       .catch(() => {});
   }, []);
@@ -388,9 +399,16 @@ export default function Home() {
         </div>
       </div>
 
-      {apiCostTotal !== null && (
+      {usage !== null && (
         <p style={{ fontSize: 15, color: "#999", margin: 0 }}>
-          API usage so far: ${apiCostTotal.toFixed(2)}
+          A.I. Cost so far: ₱{(usage.totalCostUsd * USD_TO_PHP_RATE).toFixed(2)}
+          {usage.scanCount > 0 && (
+            <>
+              {" "}
+              ({usage.scanCount} slip{usage.scanCount === 1 ? "" : "s"} scanned, ₱
+              {((usage.scanCostUsd / usage.scanCount) * USD_TO_PHP_RATE).toFixed(2)}/scan)
+            </>
+          )}
         </p>
       )}
 
@@ -497,6 +515,14 @@ export default function Home() {
             )}
           </div>
           <ExistingOrderRecap order={duplicateSlip} />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button onClick={handleProceedToUpdate} style={{ ...buttonStyle, flex: 1 }}>
+              Update Record
+            </button>
+            <button onClick={handleRetake} style={secondaryButtonStyle}>
+              Return to Home Page
+            </button>
+          </div>
           {duplicateSlip.photoThumbnailUrl && duplicateSlip.photoThumbnailUrl !== failedThumbnailUrl ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -514,14 +540,6 @@ export default function Home() {
               </a>
             )
           )}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button onClick={handleProceedToUpdate} style={{ ...buttonStyle, flex: 1 }}>
-              Update Record
-            </button>
-            <button onClick={handleRetake} style={secondaryButtonStyle}>
-              Return to Home Page
-            </button>
-          </div>
         </div>
       )}
 

@@ -153,6 +153,10 @@ export interface DailyReport {
   // without a separate round trip per row (Kareem, 2026-08-17: "link the
   // slip number to the google image").
   photos: Record<string, PhotoLinkInfo>;
+  // Every distinct date (across the whole sheet, not just this month) that
+  // has at least one recorded sale -- lets the calendar bold those days
+  // without a separate round trip per month viewed (Kareem, 2026-08-18).
+  datesWithSales: string[];
 }
 
 export async function computeDailyReport(requestedDateKey?: string): Promise<DailyReport> {
@@ -178,5 +182,12 @@ export async function computeDailyReport(requestedDateKey?: string): Promise<Dai
     if (info) photos[s.slipNumber] = info;
   }
 
-  return { dateKey, membersPaid, nonMembersPaid, membersNotPaid, nonMembersNotPaid, totalSales, photos };
+  const datesWithSalesSet = new Set<string>();
+  for (const row of rows.slice(1)) {
+    const key = dateKeyFromRow(row);
+    if (key) datesWithSalesSet.add(key);
+  }
+  const datesWithSales = [...datesWithSalesSet];
+
+  return { dateKey, membersPaid, nonMembersPaid, membersNotPaid, nonMembersNotPaid, totalSales, photos, datesWithSales };
 }

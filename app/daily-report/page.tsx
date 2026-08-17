@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { DailyReport, DailyReportBucket } from "@/lib/dailyReport";
 import type { PhotoLinkInfo } from "@/lib/photoLog";
 import { usePageTitle } from "@/lib/usePageTitle";
+import { DateCalendar } from "@/components/DateCalendar";
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -93,7 +94,11 @@ export default function DailyReportPage() {
         </div>
       </div>
 
-      <input type="date" value={dateKey} onChange={(e) => handleDateChange(e.target.value)} style={inputStyle} />
+      <DateCalendar
+        value={dateKey}
+        onChange={handleDateChange}
+        markedDates={new Set(report?.datesWithSales ?? [])}
+      />
 
       {status === "loading" && <p>Loading…</p>}
       {status === "error" && (
