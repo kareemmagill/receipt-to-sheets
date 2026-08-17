@@ -47,7 +47,6 @@ export default function Home() {
   // fires immediately off the raw OCR read, before any review has happened.
   const [duplicateSlip, setDuplicateSlip] = useState<ExistingOrderSummary | null>(null);
   const [savedOrder, setSavedOrder] = useState<EditableOrder | null>(null);
-  const [savedPhotoLink, setSavedPhotoLink] = useState<string | null>(null);
   const [photoWarning, setPhotoWarning] = useState<string | null>(null);
   // Non-null while the verification form should replace an existing record
   // on save rather than append a new one -- either re-opening the form to
@@ -242,7 +241,6 @@ export default function Home() {
     setExistingOrder(null);
     setDuplicateSlip(null);
     setSavedOrder(null);
-    setSavedPhotoLink(null);
     setPhotoWarning(null);
     setEditingSlipNumber(null);
     setDeleteStatus("idle");
@@ -330,7 +328,6 @@ export default function Home() {
       }
 
       setSavedOrder(order);
-      setSavedPhotoLink(data.photoLink ?? (replaceSlipNumber ? savedPhotoLink : null));
       setPhotoWarning(data.photoWarning ?? data.replaceWarning ?? null);
       setEditingSlipNumber(null);
       setExistingOrder(null);
@@ -562,11 +559,6 @@ export default function Home() {
                 #{savedOrder.order_slip_number || "?"}
               </strong>
             </p>
-            {savedPhotoLink && (
-              <a href={savedPhotoLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13 }}>
-                View photo of chit
-              </a>
-            )}
           </div>
 
           {photoWarning && <p style={{ color: "#8a6d00", fontSize: 12 }}>{photoWarning}</p>}
@@ -599,6 +591,18 @@ export default function Home() {
                   Scan Another Slip
                 </button>
               </div>
+
+              {imageDataUrl && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <span style={{ fontSize: 12, color: "#777" }}>Saved chit photo</span>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={imageDataUrl}
+                    alt="Saved order slip"
+                    style={{ width: "100%", borderRadius: 8, border: "1px solid #ccc" }}
+                  />
+                </div>
+              )}
             </>
           )}
         </div>
