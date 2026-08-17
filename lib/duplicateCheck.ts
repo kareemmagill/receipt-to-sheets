@@ -20,6 +20,14 @@ export interface ExistingOrderSummary {
   customer: string;
   date: string;
   items: ExistingOrderItem[];
+  // Added so the recap screens can lay these out like the real printed
+  // slip (Kareem, 2026-08-18: "imitate the layout" of the physical order
+  // slip) -- slipType is "Bar" | "Restaurant" | "", memberStatus is
+  // "Member" | "Non-Member" | "", terms is "COD" | "CREDIT" | "".
+  slipType: string;
+  waitress: string;
+  memberStatus: string;
+  terms: string;
   // ISO/UTC when the row was saved, and who/what saved it (see
   // buildSalesOrderRows) -- empty for legacy rows saved before these
   // columns existed (2026-08-17).
@@ -52,11 +60,14 @@ const CLASS_COL = 1;
 const DATE_COL = 2;
 const SLIP_NUM_COL = 3;
 const AR_COL = 4;
+const TERMS_COL = 5;
 const ITEM_COL = 10;
 const DESC_COL = 11;
 const QTY_COL = 8;
 const RATE_COL = 12;
 const AMOUNT_COL = 13;
+const WAITRESS_COL = 14;
+const MEMBER_STATUS_COL = 15;
 const ENTERED_AT_COL = 16;
 const ENTERED_BY_COL = 17;
 const DEVICE_COL = 18;
@@ -110,6 +121,10 @@ export function findExistingOrderBySlip(
     arNumber: (existingRows[0][AR_COL] ?? "").trim(),
     customer: (existingRows[0][NAME_COL] ?? "").trim(),
     date: (existingRows[0][DATE_COL] ?? "").trim(),
+    slipType: (existingRows[0][CLASS_COL] ?? "").trim(),
+    waitress: (existingRows[0][WAITRESS_COL] ?? "").trim(),
+    memberStatus: (existingRows[0][MEMBER_STATUS_COL] ?? "").trim(),
+    terms: (existingRows[0][TERMS_COL] ?? "").trim(),
     enteredAt: (existingRows[0][ENTERED_AT_COL] ?? "").trim(),
     enteredBy: (existingRows[0][ENTERED_BY_COL] ?? "").trim(),
     device: (existingRows[0][DEVICE_COL] ?? "").trim(),

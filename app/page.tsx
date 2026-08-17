@@ -13,6 +13,7 @@ import { getDeviceLabel } from "@/lib/deviceId";
 import { getStoredUserName, setStoredUserName } from "@/lib/userName";
 import { SAMPLE_SLIPS } from "@/lib/sampleSlips";
 import { usePageTitle } from "@/lib/usePageTitle";
+import { SlipLayout } from "@/components/SlipLayout";
 
 // Approximate, hand-set -- there's no live exchange-rate feed wired up.
 // Anthropic bills in USD; this is purely a display conversion for
@@ -650,10 +651,6 @@ function sumAmounts(items: EditableOrder["items"]): number {
   return items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
 }
 
-function formatMoney(n: number): string {
-  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
 // Stored as ISO/UTC (see buildSalesOrderRows) -- displayed in the viewer's
 // own local time, dd/mm/yyyy to match the rest of the app's date format.
 function formatEnteredAt(iso: string): string {
@@ -668,46 +665,25 @@ function formatEnteredAt(iso: string): string {
 }
 
 function OrderSummary({ order }: { order: EditableOrder }) {
-  const slipTypeLabel =
-    order.slip_type === "Bar" ? "Order Slip (Bar)" : order.slip_type === "Restaurant" ? "Food Order Slip" : "—";
-  const paymentLabel = order.terms === "COD" ? "Paid" : order.terms === "CREDIT" ? "Not Paid" : "—";
-
   return (
-    <div
-      style={{
-        border: "1px solid #ccc",
-        borderRadius: 8,
-        padding: 14,
-        display: "flex",
-        flexDirection: "column",
-        gap: 6,
-        fontSize: 14,
-      }}
-    >
-      <SummaryRow label="Slip Type" value={slipTypeLabel} />
-      <SummaryRow label="Customer" value={order.customer_suggested || order.customer_written || "—"} />
-      <SummaryRow label="Member Status" value={order.member_status || "—"} />
-      <SummaryRow label="Waitress" value={order.waitress || "—"} />
-      <SummaryRow label="Date" value={order.order_slip_date || "—"} />
-      {order.memo && <SummaryRow label="Memo" value={order.memo} />}
-
-      <div style={{ borderTop: "1px solid #eee", marginTop: 4, paddingTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-        {order.items.map((item) => (
-          <div key={item.id} style={{ display: "flex", gap: 8, fontSize: 13 }}>
-            <span style={{ width: 24, flexShrink: 0, color: "#777" }}>{item.qty}x</span>
-            <span style={{ flex: 1 }}>{item.description}</span>
-            <span style={{ width: 60, flexShrink: 0, color: "#777" }}>{item.item}</span>
-            <span style={{ width: 60, flexShrink: 0, textAlign: "right" }}>{item.amount}</span>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ borderTop: "1px solid #eee", paddingTop: 8, display: "flex", justifyContent: "space-between", fontWeight: 600 }}>
-        <span>Total</span>
-        <span>{formatMoney(sumAmounts(order.items))}</span>
-      </div>
-
-      <SummaryRow label="Payment" value={paymentLabel} />
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <SlipLayout
+        slipNumber={order.order_slip_number || "?"}
+        slipType={order.slip_type}
+        customer={order.customer_suggested || order.customer_written}
+        waitress={order.waitress}
+        date={order.order_slip_date}
+        memberStatus={order.member_status}
+        items={order.items.map((item) => ({
+          qty: item.qty,
+          description: item.description,
+          itemCode: item.item,
+          amount: item.amount,
+        }))}
+        total={sumAmounts(order.items)}
+        terms={order.terms}
+      />
+      {order.memo && <p style={{ fontSize: 13, color: "#777", margin: 0 }}>Memo: {order.memo}</p>}
     </div>
   );
 }
@@ -716,45 +692,22 @@ function ExistingOrderRecap({ order }: { order: ExistingOrderSummary }) {
   const total = order.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
 
   return (
-    <div
-      style={{
-        border: "1px solid #ccc",
-        borderRadius: 8,
-        padding: 14,
-        display: "flex",
-        flexDirection: "column",
-        gap: 6,
-        fontSize: 14,
-      }}
-    >
-      <SummaryRow label="Customer" value={order.customer || "—"} />
-      <SummaryRow label="Date" value={order.date || "—"} />
-
-      <div style={{ borderTop: "1px solid #eee", marginTop: 4, paddingTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-        {order.items.map((item, i) => (
-          <div key={i} style={{ display: "flex", gap: 8, fontSize: 13 }}>
-            <span style={{ width: 24, flexShrink: 0, color: "#777" }}>{item.qty}x</span>
-            <span style={{ flex: 1 }}>{item.description}</span>
-            <span style={{ width: 60, flexShrink: 0, color: "#777" }}>{item.item}</span>
-            <span style={{ width: 60, flexShrink: 0, textAlign: "right" }}>{item.amount}</span>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ borderTop: "1px solid #eee", paddingTop: 8, display: "flex", justifyContent: "space-between", fontWeight: 600 }}>
-        <span>Total</span>
-        <span>{formatMoney(total)}</span>
-      </div>
-    </div>
-  );
-}
-
-function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-      <span style={{ color: "#777" }}>{label}</span>
-      <span style={{ textAlign: "right" }}>{value}</span>
-    </div>
+    <SlipLayout
+      slipNumber={order.slipNumber}
+      slipType={order.slipType}
+      customer={order.customer}
+      waitress={order.waitress}
+      date={order.date}
+      memberStatus={order.memberStatus}
+      items={order.items.map((item) => ({
+        qty: item.qty,
+        description: item.description,
+        itemCode: item.item,
+        amount: item.amount,
+      }))}
+      total={total}
+      terms={order.terms}
+    />
   );
 }
 
