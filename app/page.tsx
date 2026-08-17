@@ -381,7 +381,7 @@ export default function Home() {
       </div>
 
       {apiCostTotal !== null && (
-        <p style={{ fontSize: 12, color: "#999", margin: 0 }}>
+        <p style={{ fontSize: 15, color: "#999", margin: 0 }}>
           API usage so far: ${apiCostTotal.toFixed(2)}
         </p>
       )}
@@ -426,7 +426,7 @@ export default function Home() {
 
           {!imageDataUrl && SAMPLE_SLIPS.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <span style={{ fontSize: 12, color: "#777" }}>No slip on hand? Try a sample:</span>
+              <span style={{ fontSize: 15, color: "#555" }}>No slip on hand? Try a sample:</span>
               <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
                 {SAMPLE_SLIPS.map((sample) => (
                   <button
