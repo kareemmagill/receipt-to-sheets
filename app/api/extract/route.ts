@@ -6,6 +6,7 @@ import { matchCustomer } from "@/lib/customerMatch";
 import { waitressNamesFromRows, walkInNamesFromRows } from "@/lib/knownNames";
 import { itemCorrectionsFromRows } from "@/lib/itemCorrections";
 import { logApiUsage } from "@/lib/apiUsageLog";
+import { normalizeDate, mostRecentOrderDate } from "@/lib/dateNormalize";
 import {
   itemCodeTemplateFromRows,
   matchItemCodeCandidates,
@@ -254,7 +255,15 @@ export async function POST(req: Request) {
       waitress: (raw.waitress_written ?? "").trim(),
       slip_type: slipType,
       member_status: memberStatus,
-      order_slip_date: raw.order_slip_date ?? "",
+      // Normalized here (not just at save time) using the real reference
+      // date from the sheet -- the verification screen used to normalize
+      // this itself client-side with no reference date on hand at all
+      // (there's no sheet data in the browser), so the year-sanity check
+      // in normalizeDate never had anything to compare against and a
+      // misread year like "2020" instead of "2026" showed on screen
+      // exactly as OCR read it, only getting caught later at save time
+      // (real gap, Kareem, 2026-08-17: "the date is still wrong").
+      order_slip_date: normalizeDate(raw.order_slip_date ?? "", mostRecentOrderDate(salesOrderRows)),
       order_slip_number: raw.order_slip_number ?? "",
       terms: raw.terms ?? "",
       memo: raw.memo ?? "",
