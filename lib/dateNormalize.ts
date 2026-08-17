@@ -46,6 +46,22 @@ function daysApart(c: DateCandidate, reference: Date): number {
   return Math.abs(asDate.getTime() - reference.getTime()) / 86_400_000;
 }
 
+// Slips get scanned in the same shift/week as each other, never years
+// apart -- a year this far from the reference almost certainly means a
+// single OCR-misread year digit (found 2026-08-17: slip #21206 read as
+// "08/11/2020" while every other slip that week was 2026 -- a misread 6
+// as 0), not a genuinely old or future order.
+const YEAR_SANITY_WINDOW_DAYS = 60;
+
+// If swapping in the reference date's year would land within a sane
+// window, trust that year over whatever the model actually read --
+// "common sense" over a raw OCR digit, per Kareem, 2026-08-17.
+function withSaneYear(c: DateCandidate, referenceDate: Date | null): DateCandidate {
+  if (!referenceDate || c.year === referenceDate.getFullYear()) return c;
+  const resniffed = { ...c, year: referenceDate.getFullYear() };
+  return daysApart(resniffed, referenceDate) <= YEAR_SANITY_WINDOW_DAYS ? resniffed : c;
+}
+
 /**
  * Finds the most recently saved order's date, for resolving ambiguous new
  * dates against it (see normalizeDate below) -- "the dates must be the
@@ -56,13 +72,20 @@ function daysApart(c: DateCandidate, reference: Date): number {
  * day-first with no reference to check against.
  */
 export function mostRecentOrderDate(salesOrderRows: string[][]): Date | null {
+  // A legitimate order is never years away from today -- guards against a
+  // single already-corrupted row (e.g. a misread year digit, before this
+  // file's own sanity check existed to catch it) becoming the reference
+  // every future save gets checked against, which would defeat the point.
+  const now = new Date();
+
   for (let i = salesOrderRows.length - 1; i >= 1; i--) {
     const raw = (salesOrderRows[i][DATE_COL] ?? "").trim();
     const match = raw.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2}|\d{4})$/);
     if (!match) continue;
 
     const candidates = parseDateCandidates(parseInt(match[1], 10), parseInt(match[2], 10), match[3]);
-    if (candidates.length > 0) return new Date(candidates[0].year, candidates[0].month - 1, candidates[0].day);
+    const sane = candidates.find((c) => Math.abs(c.year - now.getFullYear()) <= 1);
+    if (sane) return new Date(sane.year, sane.month - 1, sane.day);
   }
   return null;
 }
@@ -90,10 +113,17 @@ export function normalizeDate(value: string, referenceDate: Date | null): string
   const candidates = parseDateCandidates(parseInt(match[1], 10), parseInt(match[2], 10), match[3]);
   if (candidates.length === 0) return trimmed;
 
+  // Correct an implausible year on each candidate *before* picking
+  // between day-first/month-first readings -- otherwise two candidates
+  // that are both years away from the reference look equally "close" by
+  // raw day count (both off by ~2000+ days), when only one of them
+  // actually makes sense once its year gets fixed.
+  const saneCandidates = candidates.map((c) => withSaneYear(c, referenceDate));
+
   const chosen =
-    candidates.length > 1 && referenceDate
-      ? candidates.reduce((closest, c) => (daysApart(c, referenceDate) < daysApart(closest, referenceDate) ? c : closest))
-      : candidates[0]; // day-first reading, since it's built first above
+    saneCandidates.length > 1 && referenceDate
+      ? saneCandidates.reduce((closest, c) => (daysApart(c, referenceDate) < daysApart(closest, referenceDate) ? c : closest))
+      : saneCandidates[0]; // day-first reading, since it's built first above
 
   return `${pad2(chosen.day)}/${pad2(chosen.month)}/${chosen.year}`;
 }
