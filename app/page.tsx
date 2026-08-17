@@ -71,6 +71,19 @@ export default function Home() {
   // visit. Recorded on save alongside the device label so it's clear who
   // entered each record (Kareem, 2026-08-17).
   const [userName, setUserName] = useState("");
+  // Running estimate of what this app's Claude API calls have cost so far
+  // (Kareem, 2026-08-17) -- null while loading/unavailable, in which case
+  // nothing renders rather than showing a misleading $0.00.
+  const [apiCostTotal, setApiCostTotal] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch("/api/usage-total")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.ok) setApiCostTotal(data.totalUsd);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     // Deferred via .then() rather than called directly in the effect body
@@ -336,6 +349,12 @@ export default function Home() {
           </Link>
         </div>
       </div>
+
+      {apiCostTotal !== null && (
+        <p style={{ fontSize: 12, color: "#999", margin: 0 }}>
+          API usage so far: ${apiCostTotal.toFixed(2)}
+        </p>
+      )}
 
       {!extraction && (
         <>

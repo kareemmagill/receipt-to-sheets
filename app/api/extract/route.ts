@@ -1,10 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { ORDER_SLIP_SCHEMA, type OrderSlipExtraction, type OrderSlipItem, type UncertainField } from "@/lib/extractSchema";
 import { readTab } from "@/lib/googleSheets";
 import { matchCustomer } from "@/lib/customerMatch";
 import { waitressNamesFromRows, walkInNamesFromRows } from "@/lib/knownNames";
 import { itemCorrectionsFromRows } from "@/lib/itemCorrections";
+import { logApiUsage } from "@/lib/apiUsageLog";
 import {
   itemCodeTemplateFromRows,
   matchItemCodeCandidates,
@@ -128,6 +129,22 @@ export async function POST(req: Request) {
       output_config: {
         format: { type: "json_schema", schema: ORDER_SLIP_SCHEMA },
       },
+    });
+
+    // Best-effort cost logging, deferred so it never adds to the wait --
+    // the reviewer doesn't need this to see their extraction (Kareem,
+    // 2026-08-17: running API cost total on the home page).
+    after(async () => {
+      try {
+        await logApiUsage("extract", "claude-sonnet-5", {
+          inputTokens: response.usage.input_tokens,
+          outputTokens: response.usage.output_tokens,
+          cacheCreationInputTokens: response.usage.cache_creation_input_tokens ?? 0,
+          cacheReadInputTokens: response.usage.cache_read_input_tokens ?? 0,
+        });
+      } catch {
+        // Best-effort; nothing user-facing depends on it.
+      }
     });
 
     if (response.stop_reason === "refusal") {

@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { unstable_cache } from "next/cache";
 import Anthropic from "@anthropic-ai/sdk";
 import { readTab } from "@/lib/googleSheets";
+import { logApiUsage } from "@/lib/apiUsageLog";
 
 const client = new Anthropic();
 
@@ -79,6 +80,21 @@ export async function POST(req: Request) {
           ],
         },
       ],
+    });
+
+    // Best-effort cost logging, deferred so it never adds to the wait --
+    // see app/api/extract/route.ts for the same pattern.
+    after(async () => {
+      try {
+        await logApiUsage("query", "claude-opus-5", {
+          inputTokens: response.usage.input_tokens,
+          outputTokens: response.usage.output_tokens,
+          cacheCreationInputTokens: response.usage.cache_creation_input_tokens ?? 0,
+          cacheReadInputTokens: response.usage.cache_read_input_tokens ?? 0,
+        });
+      } catch {
+        // Best-effort; nothing user-facing depends on it.
+      }
     });
 
     if (response.stop_reason === "refusal") {
