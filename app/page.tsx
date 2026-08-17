@@ -112,6 +112,14 @@ export default function Home() {
       .catch(() => {});
   }, []);
 
+  // The reviewer is usually scrolled down near Confirm & Save when a save
+  // succeeds -- jump back to the top so the "Saved Chit" summary is
+  // immediately visible instead of landing wherever they happened to be
+  // scrolled (Kareem, 2026-08-17).
+  useEffect(() => {
+    if (saveStatus === "success") window.scrollTo(0, 0);
+  }, [saveStatus]);
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
