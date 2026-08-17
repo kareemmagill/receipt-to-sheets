@@ -830,7 +830,7 @@ export default function VerificationForm({
           <img
             src={photoDataUrl}
             alt="Order slip"
-            style={{ width: "100%", borderRadius: 8, border: "1px solid #ccc" }}
+            style={{ maxWidth: "100%", height: "auto", display: "block", borderRadius: 8, border: "1px solid #ccc" }}
           />
         </div>
       )}

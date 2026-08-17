@@ -449,7 +449,7 @@ export default function Home() {
             <img
               src={imageDataUrl}
               alt="Captured order slip"
-              style={{ width: "100%", borderRadius: 8, border: "1px solid #ccc" }}
+              style={{ maxWidth: "100%", height: "auto", display: "block", borderRadius: 8, border: "1px solid #ccc" }}
             />
           )}
 
@@ -485,7 +485,7 @@ export default function Home() {
                 src={duplicateSlip.photoThumbnailUrl}
                 alt="Recorded chit"
                 onError={() => setFailedThumbnailUrl(duplicateSlip.photoThumbnailUrl ?? null)}
-                style={{ width: "100%", borderRadius: 8, border: "1px solid #ccc" }}
+                style={{ maxWidth: "100%", height: "auto", display: "block", borderRadius: 8, border: "1px solid #ccc" }}
               />
               {duplicateSlip.photoLink && (
                 <a href={duplicateSlip.photoLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#777" }}>
@@ -599,7 +599,7 @@ export default function Home() {
                   <img
                     src={imageDataUrl}
                     alt="Saved order slip"
-                    style={{ width: "100%", borderRadius: 8, border: "1px solid #ccc" }}
+                    style={{ maxWidth: "100%", height: "auto", display: "block", borderRadius: 8, border: "1px solid #ccc" }}
                   />
                 </div>
               )}
