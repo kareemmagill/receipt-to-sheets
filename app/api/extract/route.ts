@@ -2,7 +2,7 @@ import { NextResponse, after } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { ORDER_SLIP_SCHEMA, type OrderSlipExtraction, type OrderSlipItem, type UncertainField } from "@/lib/extractSchema";
 import { readTab } from "@/lib/googleSheets";
-import { matchCustomer } from "@/lib/customerMatch";
+import { matchCustomer, customerActivityCounts } from "@/lib/customerMatch";
 import { waitressNamesFromRows, walkInNamesFromRows } from "@/lib/knownNames";
 import { itemCorrectionsFromRows } from "@/lib/itemCorrections";
 import { priceHistoryFromRows, knownPrice } from "@/lib/priceHistory";
@@ -328,7 +328,16 @@ export async function POST(req: Request) {
         .map((row) => row[0])
         .filter((name): name is string => Boolean(name?.trim()));
       if (extraction.customer_written) {
-        extraction.customer_matches = matchCustomer(extraction.customer_written, extraction.customer_list);
+        // Breaks ties among equally-plausible matches (e.g. "Rob" against
+        // several different "ROBERT ..." members) in favor of whoever's
+        // actually a more active customer on record -- see
+        // customerActivityCounts (Kareem, 2026-08-17).
+        extraction.customer_matches = matchCustomer(
+          extraction.customer_written,
+          extraction.customer_list,
+          6,
+          customerActivityCounts(salesOrderRows)
+        );
       }
     } catch {
       // Customer lookup failing shouldn't block the extraction — the user
