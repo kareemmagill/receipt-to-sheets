@@ -247,7 +247,20 @@ export async function POST(req: Request) {
     // verification form -- it only gets folded into Memo at the point of
     // actually writing a sheet row (lib/salesOrderRows.ts), since Memo is
     // the only column available for it, not before.
-    const memberStatus = raw.member_status === "Member" || raw.member_status === "Non-Member" ? raw.member_status : "";
+    // Defaults to Non-Member when the checkbox itself isn't legible --
+    // never leaves it blank (real bug, Kareem, 2026-08-17: slip #34899's
+    // Member/Non-Member marking was unclear, which left member_status ""
+    // and silently routed the Customer field through the Member-matching
+    // branch below instead of just trusting the OCR read; "Jenny" wasn't
+    // a registered Member so nothing matched and Customer Name showed
+    // blank even though the handwriting itself read fine). Defaulting to
+    // Non-Member is also the safer guess either way -- it forces Payment
+    // to stay COD (see VerificationForm's enforcePaymentRule) rather than
+    // risking an unconfirmed Member getting waved through on credit.
+    const memberStatus = raw.member_status === "Member" ? "Member" : "Non-Member";
+    if (raw.member_status !== "Member" && raw.member_status !== "Non-Member") {
+      uncertainFields.push({ field: "member_status", confidence: 0.2 });
+    }
 
     const extraction: OrderSlipExtraction = {
       customer_written: raw.customer_written ?? "",

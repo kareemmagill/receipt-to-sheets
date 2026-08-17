@@ -822,6 +822,18 @@ export default function VerificationForm({
           {saving ? "Saving…" : confirmLabel}
         </button>
       </div>
+
+      {photoDataUrl && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <span style={fieldLabelStyle}>Slip photo, for comparison</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={photoDataUrl}
+            alt="Order slip"
+            style={{ width: "100%", borderRadius: 8, border: "1px solid #ccc" }}
+          />
+        </div>
+      )}
     </div>
   );
 }
