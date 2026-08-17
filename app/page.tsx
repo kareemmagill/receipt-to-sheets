@@ -528,7 +528,7 @@ export default function Home() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={duplicateSlip.photoThumbnailUrl}
-                alt="Recorded chit"
+                alt="Recorded slip"
                 onError={() => setFailedThumbnailUrl(duplicateSlip.photoThumbnailUrl ?? null)}
                 style={{ maxWidth: "100%", height: "auto", display: "block", borderRadius: 8, border: "1px solid #ccc" }}
               />
@@ -536,7 +536,7 @@ export default function Home() {
           ) : (
             duplicateSlip.photoLink && (
               <a href={duplicateSlip.photoLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13 }}>
-                View photo of recorded chit
+                View photo of recorded slip
               </a>
             )
           )}
@@ -589,7 +589,7 @@ export default function Home() {
           <h2 style={screenTitleStyle}>Confirmation</h2>
           <div>
             <p style={{ fontSize: 15 }}>
-              Saved Chit{" "}
+              Saved Slip{" "}
               <strong style={{ color: "#0a7a2f", fontSize: 18 }}>
                 #{savedOrder.order_slip_number || "?"}
               </strong>
@@ -629,7 +629,7 @@ export default function Home() {
 
               {imageDataUrl && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <span style={{ fontSize: 12, color: "#777" }}>Saved chit photo</span>
+                  <span style={{ fontSize: 12, color: "#777" }}>Saved slip photo</span>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={imageDataUrl}
