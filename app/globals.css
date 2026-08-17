@@ -17,7 +17,15 @@ html {
 html,
 body {
   max-width: 100vw;
-  overflow-x: hidden;
+  /* auto, not hidden -- if anything still ends up wider than the
+     viewport despite the min-width reset below, this makes it reachable
+     by scrolling instead of silently clipped with no way to see or
+     recover it (real ongoing issue, Kareem, 2026-08-17: multiple fixes
+     for the underlying width cause still hadn't caught everything, and a
+     hard clip meant genuinely inaccessible content each time). A visible
+     horizontal scrollbar on a page that shouldn't need one is a much
+     smaller problem than that. */
+  overflow-x: auto;
 }
 
 body {
