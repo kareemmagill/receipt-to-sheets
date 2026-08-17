@@ -5,6 +5,7 @@ import { readTab } from "@/lib/googleSheets";
 import { matchCustomer } from "@/lib/customerMatch";
 import { waitressNamesFromRows, walkInNamesFromRows } from "@/lib/knownNames";
 import { itemCorrectionsFromRows } from "@/lib/itemCorrections";
+import { priceHistoryFromRows, knownPrice } from "@/lib/priceHistory";
 import { logApiUsage } from "@/lib/apiUsageLog";
 import { normalizeDate, mostRecentOrderDate } from "@/lib/dateNormalize";
 import {
@@ -201,6 +202,32 @@ export async function POST(req: Request) {
       // fall through with an empty template
     }
 
+    // Defaults to Non-Member when the checkbox itself isn't legible --
+    // never leaves it blank (real bug, Kareem, 2026-08-17: slip #34899's
+    // Member/Non-Member marking was unclear, which left member_status ""
+    // and silently routed the Customer field through the Member-matching
+    // branch below instead of just trusting the OCR read; "Jenny" wasn't
+    // a registered Member so nothing matched and Customer Name showed
+    // blank even though the handwriting itself read fine). Defaulting to
+    // Non-Member is also the safer guess either way -- it forces Payment
+    // to stay COD (see VerificationForm's enforcePaymentRule) rather than
+    // risking an unconfirmed Member getting waved through on credit.
+    // Computed here (before the items loop, not after) since the
+    // price-history check below needs it per item.
+    const memberStatus = raw.member_status === "Member" ? "Member" : "Non-Member";
+    if (raw.member_status !== "Member" && raw.member_status !== "Non-Member") {
+      uncertainFields.push({ field: "member_status", confidence: 0.2 });
+    }
+
+    // Self-correcting price reference built from past saves (see
+    // lib/priceHistory.ts) -- no manually maintained price sheet needed.
+    // Used only to flag a read amount that doesn't match what this same
+    // item + Member/Non-Member combo has actually sold for before, never
+    // to silently correct it: a genuine price change (Kareem, 2026-08-17:
+    // "prices might change outside the club's control") looks identical to
+    // an OCR misread from here, so a human has to be the one to decide.
+    const priceHistory = priceHistoryFromRows(salesOrderRows);
+
     const items: OrderSlipItem[] = (raw.items ?? []).map((item, index) => {
       const description = item.description ?? "";
       const candidates = matchItemCodeCandidates(description, itemTemplate, 5);
@@ -225,6 +252,20 @@ export async function POST(req: Request) {
       const qty = item.qty ?? "";
       const amount = item.amount ?? "";
 
+      if (codeMatch) {
+        const qtyNum = parseFloat(qty);
+        const amountNum = parseFloat(amount);
+        if (Number.isFinite(qtyNum) && qtyNum > 0 && Number.isFinite(amountNum)) {
+          const readRate = amountNum / qtyNum;
+          const expected = knownPrice(priceHistory, codeMatch.entry.itemCode, memberStatus);
+          // Small tolerance for rounding, not exact-cents precision -- real
+          // prices here are whole pesos.
+          if (expected !== null && Math.abs(readRate - expected) >= 1) {
+            uncertainFields.push({ field: `items[${index}].amount`, confidence: 0.5 });
+          }
+        }
+      }
+
       return {
         qty,
         invoice_class: itemClass,
@@ -247,20 +288,6 @@ export async function POST(req: Request) {
     // verification form -- it only gets folded into Memo at the point of
     // actually writing a sheet row (lib/salesOrderRows.ts), since Memo is
     // the only column available for it, not before.
-    // Defaults to Non-Member when the checkbox itself isn't legible --
-    // never leaves it blank (real bug, Kareem, 2026-08-17: slip #34899's
-    // Member/Non-Member marking was unclear, which left member_status ""
-    // and silently routed the Customer field through the Member-matching
-    // branch below instead of just trusting the OCR read; "Jenny" wasn't
-    // a registered Member so nothing matched and Customer Name showed
-    // blank even though the handwriting itself read fine). Defaulting to
-    // Non-Member is also the safer guess either way -- it forces Payment
-    // to stay COD (see VerificationForm's enforcePaymentRule) rather than
-    // risking an unconfirmed Member getting waved through on credit.
-    const memberStatus = raw.member_status === "Member" ? "Member" : "Non-Member";
-    if (raw.member_status !== "Member" && raw.member_status !== "Non-Member") {
-      uncertainFields.push({ field: "member_status", confidence: 0.2 });
-    }
 
     const extraction: OrderSlipExtraction = {
       customer_written: raw.customer_written ?? "",
