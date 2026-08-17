@@ -396,6 +396,7 @@ export default function Home() {
 
       {!extraction && (
         <>
+          <h2 style={screenTitleStyle}>Scan a Slip</h2>
           <input
             ref={inputRef}
             type="file"
@@ -483,6 +484,7 @@ export default function Home() {
 
       {duplicateSlip && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <h2 style={screenTitleStyle}>Duplicate Slip</h2>
           <div>
             <p style={{ color: "#b00020", fontSize: 18, fontWeight: 700, margin: 0 }}>
               Slip #{duplicateSlip.slipNumber} already entered!
@@ -525,6 +527,7 @@ export default function Home() {
 
       {extraction && !duplicateSlip && !existingOrder && saveStatus !== "success" && (
         <>
+          <h2 style={screenTitleStyle}>Data Entry</h2>
           {saveStatus === "error" && <p style={{ color: "#b00020" }}>Save failed: {saveError}</p>}
           <VerificationForm
             extraction={extraction}
@@ -542,6 +545,7 @@ export default function Home() {
 
       {existingOrder && saveStatus !== "success" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <h2 style={screenTitleStyle}>Duplicate Slip</h2>
           <p style={{ color: "#8a6d00" }}>{saveError}</p>
           <ExistingOrderRecap order={existingOrder} />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -564,6 +568,7 @@ export default function Home() {
 
       {saveStatus === "success" && savedOrder && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <h2 style={screenTitleStyle}>Confirmation</h2>
           <div>
             <p style={{ fontSize: 15 }}>
               Saved Chit{" "}
@@ -734,6 +739,19 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+// A visible heading per screen -- the top-level h1 never changes as you
+// move through the flow (scan -> data entry -> duplicate -> confirmation
+// are all the same route), so there was no on-page way to tell them apart
+// when talking about "which page" (Kareem, 2026-08-18: "so we can be sure
+// we know what page we are talking about editing").
+const screenTitleStyle: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 700,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  color: "#999",
+};
 
 const buttonStyle: React.CSSProperties = {
   padding: "14px 20px",
