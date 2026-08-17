@@ -11,6 +11,7 @@ import { loadLastPhoto, saveLastPhoto } from "@/lib/lastPhotoStore";
 import { resizeImage } from "@/lib/resizeImage";
 import { getDeviceLabel } from "@/lib/deviceId";
 import { getStoredUserName, setStoredUserName } from "@/lib/userName";
+import { SAMPLE_SLIPS } from "@/lib/sampleSlips";
 
 // Cap for the copy archived to Google Drive on save -- lowered from 2200
 // to 800 (Kareem, 2026-08-17) to keep uploads faster and Drive usage
@@ -144,6 +145,35 @@ export default function Home() {
     setExistingOrder(null);
     setDuplicateSlip(null);
     setImageDataUrl(lastImageDataUrl);
+  }
+
+  // Lets testers run the full scan flow without an actual physical slip
+  // (Kareem, 2026-08-17) -- fetches a bundled sample photo and feeds it in
+  // exactly like a camera/library pick.
+  async function handleUseSample(file: string) {
+    setStatus("idle");
+    setError(null);
+    setExtraction(null);
+    setSaveStatus("idle");
+    setSaveError(null);
+    setExistingOrder(null);
+    setDuplicateSlip(null);
+
+    try {
+      const res = await fetch(file);
+      const blob = await res.blob();
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        setImageDataUrl(result);
+        setLastImageDataUrl(result);
+        saveLastPhoto(result).catch(() => {});
+      };
+      reader.readAsDataURL(blob);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus("error");
+    }
   }
 
   async function handleProcess() {
@@ -393,6 +423,29 @@ export default function Home() {
               </button>
             )}
           </div>
+
+          {!imageDataUrl && SAMPLE_SLIPS.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={{ fontSize: 12, color: "#777" }}>No slip on hand? Try a sample:</span>
+              <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
+                {SAMPLE_SLIPS.map((sample) => (
+                  <button
+                    key={sample.file}
+                    type="button"
+                    onClick={() => handleUseSample(sample.file)}
+                    style={{ padding: 0, border: "1px solid #ccc", borderRadius: 8, background: "none", cursor: "pointer", flexShrink: 0 }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={sample.file}
+                      alt={sample.label}
+                      style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 7, display: "block" }}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {imageDataUrl && (
             // eslint-disable-next-line @next/next/no-img-element
