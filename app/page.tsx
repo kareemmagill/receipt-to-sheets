@@ -365,6 +365,7 @@ export default function Home() {
   return (
     <main
       style={{
+        width: "100%",
         maxWidth: 480,
         margin: "0 auto",
         padding: "24px 16px",
@@ -430,9 +431,9 @@ export default function Home() {
           </div>
 
           {!imageDataUrl && SAMPLE_SLIPS.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%", minWidth: 0 }}>
               <span style={{ fontSize: 15, color: "#555" }}>No slip on hand? Try a sample:</span>
-              <div style={{ display: "flex", gap: 8, overflowX: "auto", minWidth: 0 }}>
+              <div style={{ display: "flex", gap: 8, overflowX: "auto", width: "100%", minWidth: 0 }}>
                 {SAMPLE_SLIPS.map((sample) => (
                   <button
                     key={sample.file}

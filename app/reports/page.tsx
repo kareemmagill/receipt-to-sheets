@@ -116,7 +116,7 @@ export default function ReportsPage() {
   );
 
   return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: "24px 16px", display: "flex", flexDirection: "column", gap: 20 }}>
+    <main style={{ width: "100%", maxWidth: 720, margin: "0 auto", padding: "24px 16px", display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1 style={{ fontSize: 20 }}>Sales Reports</h1>
         <div style={{ display: "flex", gap: 12, fontSize: 13 }}>
@@ -196,7 +196,7 @@ export default function ReportsPage() {
               <h2 style={{ fontSize: 16, marginBottom: 8 }}>
                 Orders for {matchedCustomerNames.length === 1 ? matchedCustomerNames[0] : "matching customers"}
               </h2>
-              <div style={{ overflowX: "auto", minWidth: 0 }}>
+              <div style={{ overflowX: "auto", width: "100%", minWidth: 0 }}>
                 <table style={tableStyle}>
                   <thead>
                     <tr>
@@ -231,7 +231,7 @@ export default function ReportsPage() {
           ) : (
             <section>
               <h2 style={{ fontSize: 16, marginBottom: 8 }}>Sales by Menu Item, by Date</h2>
-              <div style={{ overflowX: "auto", minWidth: 0 }}>
+              <div style={{ overflowX: "auto", width: "100%", minWidth: 0 }}>
                 <table style={tableStyle}>
                   <thead>
                     <tr>

@@ -151,7 +151,7 @@ export default function BatchImportPage() {
   const errorCount = Object.values(results).filter((r) => r.status === "error").length;
 
   return (
-    <main style={{ maxWidth: 480, margin: "0 auto", padding: "24px 16px", display: "flex", flexDirection: "column", gap: 16 }}>
+    <main style={{ width: "100%", maxWidth: 480, margin: "0 auto", padding: "24px 16px", display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1 style={{ fontSize: 20 }}>Batch Import</h1>
         <Link href="/" style={{ fontSize: 13, color: "#555" }}>

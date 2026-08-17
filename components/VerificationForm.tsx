@@ -400,7 +400,7 @@ export default function VerificationForm({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20, width: "100%", minWidth: 0 }}>
       {photoDataUrl && (
         <button type="button" onClick={() => setShowPhoto(true)} style={secondaryButtonStyle}>
           View Full Photo

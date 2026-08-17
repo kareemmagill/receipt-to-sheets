@@ -144,6 +144,7 @@ export default function DevelopmentPage() {
   return (
     <main
       style={{
+        width: "100%",
         maxWidth: 720,
         margin: "0 auto",
         padding: "24px 16px",
@@ -196,7 +197,7 @@ export default function DevelopmentPage() {
 
       <section>
         <h2 style={{ fontSize: 16, marginBottom: 8 }}>Records (most recent first)</h2>
-        <div style={{ overflowX: "auto", minWidth: 0 }}>
+        <div style={{ overflowX: "auto", width: "100%", minWidth: 0 }}>
           <table style={tableStyle}>
             <thead>
               <tr>

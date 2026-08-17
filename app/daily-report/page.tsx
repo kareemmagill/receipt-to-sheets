@@ -80,7 +80,7 @@ export default function DailyReportPage() {
 
   return (
     <main
-      style={{ maxWidth: 720, margin: "0 auto", padding: "24px 16px", display: "flex", flexDirection: "column", gap: 20 }}
+      style={{ width: "100%", maxWidth: 720, margin: "0 auto", padding: "24px 16px", display: "flex", flexDirection: "column", gap: 20 }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1 style={{ fontSize: 20 }}>Daily Sales Report</h1>
@@ -252,7 +252,7 @@ function DetailTable({
   onViewPhoto: (slipNumber: string) => void;
 }) {
   return (
-    <div style={{ overflowX: "auto", minWidth: 0 }}>
+    <div style={{ overflowX: "auto", width: "100%", minWidth: 0 }}>
       <table style={tableStyle}>
         <thead>
           <tr>
