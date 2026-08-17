@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { CustomerMonthlyTotal, CustomerOrderLine, ItemMonthlyTotal } from "@/lib/reports";
+import { usePageTitle } from "@/lib/usePageTitle";
 
 function formatMonth(monthKey: string): string {
   if (monthKey === "Unknown") return "Unknown / unparsed date";
@@ -21,6 +22,7 @@ function formatMoney(n: number): string {
 }
 
 export default function ReportsPage() {
+  usePageTitle("Sales Reports");
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
   const [itemMonthly, setItemMonthly] = useState<ItemMonthlyTotal[]>([]);

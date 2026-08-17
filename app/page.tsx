@@ -12,6 +12,7 @@ import { resizeImage } from "@/lib/resizeImage";
 import { getDeviceLabel } from "@/lib/deviceId";
 import { getStoredUserName, setStoredUserName } from "@/lib/userName";
 import { SAMPLE_SLIPS } from "@/lib/sampleSlips";
+import { usePageTitle } from "@/lib/usePageTitle";
 
 // Cap for the copy archived to Google Drive on save -- lowered from 2200
 // to 800 (Kareem, 2026-08-17) to keep uploads faster and Drive usage
@@ -23,6 +24,7 @@ import { SAMPLE_SLIPS } from "@/lib/sampleSlips";
 const ARCHIVAL_MAX_DIMENSION = 800;
 
 export default function Home() {
+  usePageTitle("PGYC Order Slip Scanner");
   const inputRef = useRef<HTMLInputElement>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);

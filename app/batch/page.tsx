@@ -9,6 +9,7 @@ import { resizeImage } from "@/lib/resizeImage";
 import { Spinner } from "@/components/Spinner";
 import { getDeviceLabel } from "@/lib/deviceId";
 import { getStoredUserName } from "@/lib/userName";
+import { usePageTitle } from "@/lib/usePageTitle";
 
 // See app/page.tsx for why the archived copy is downsized too, not just
 // the OCR-read copy -- the full-resolution original was silently failing
@@ -43,6 +44,7 @@ function buildOrderFromExtraction(extraction: OrderSlipExtraction): EditableOrde
 }
 
 export default function BatchImportPage() {
+  usePageTitle("Batch Import");
   const inputRef = useRef<HTMLInputElement>(null);
   const [photos, setPhotos] = useState<QueuedPhoto[]>([]);
   const [results, setResults] = useState<Record<string, PhotoResult>>({});

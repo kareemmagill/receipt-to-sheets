@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { DailyReport, DailyReportBucket } from "@/lib/dailyReport";
 import type { PhotoLinkInfo } from "@/lib/photoLog";
+import { usePageTitle } from "@/lib/usePageTitle";
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -34,6 +35,7 @@ function fetchDailyReport(date?: string): Promise<DailyReportResponse> {
 }
 
 export default function DailyReportPage() {
+  usePageTitle("Daily Sales Report");
   const [dateKey, setDateKey] = useState("");
   const [report, setReport] = useState<DailyReport | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");

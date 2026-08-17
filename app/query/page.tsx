@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePageTitle } from "@/lib/usePageTitle";
 
 interface Exchange {
   question: string;
@@ -9,6 +10,7 @@ interface Exchange {
 }
 
 export default function QueryPage() {
+  usePageTitle("Ask the Sales Data");
   const [question, setQuestion] = useState("");
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
   const [loading, setLoading] = useState(false);

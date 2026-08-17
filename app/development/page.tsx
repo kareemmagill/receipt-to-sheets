@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePageTitle } from "@/lib/usePageTitle";
 
 interface Status {
   totalRows: number;
@@ -28,6 +29,7 @@ function formatMoney(n: number): string {
 }
 
 export default function DevelopmentPage() {
+  usePageTitle("Development");
   const [status, setStatus] = useState<Status | null>(null);
   const [records, setRecords] = useState<Record[] | null>(null);
   const [loading, setLoading] = useState(true);
