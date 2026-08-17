@@ -252,7 +252,7 @@ function DetailTable({
   onViewPhoto: (slipNumber: string) => void;
 }) {
   return (
-    <div style={{ overflowX: "auto" }}>
+    <div style={{ overflowX: "auto", minWidth: 0 }}>
       <table style={tableStyle}>
         <thead>
           <tr>

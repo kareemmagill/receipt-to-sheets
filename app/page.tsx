@@ -422,9 +422,9 @@ export default function Home() {
           </div>
 
           {!imageDataUrl && SAMPLE_SLIPS.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
               <span style={{ fontSize: 15, color: "#555" }}>No slip on hand? Try a sample:</span>
-              <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
+              <div style={{ display: "flex", gap: 8, overflowX: "auto", minWidth: 0 }}>
                 {SAMPLE_SLIPS.map((sample) => (
                   <button
                     key={sample.file}

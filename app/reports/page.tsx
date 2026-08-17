@@ -196,7 +196,7 @@ export default function ReportsPage() {
               <h2 style={{ fontSize: 16, marginBottom: 8 }}>
                 Orders for {matchedCustomerNames.length === 1 ? matchedCustomerNames[0] : "matching customers"}
               </h2>
-              <div style={{ overflowX: "auto" }}>
+              <div style={{ overflowX: "auto", minWidth: 0 }}>
                 <table style={tableStyle}>
                   <thead>
                     <tr>
@@ -231,7 +231,7 @@ export default function ReportsPage() {
           ) : (
             <section>
               <h2 style={{ fontSize: 16, marginBottom: 8 }}>Sales by Menu Item, by Date</h2>
-              <div style={{ overflowX: "auto" }}>
+              <div style={{ overflowX: "auto", minWidth: 0 }}>
                 <table style={tableStyle}>
                   <thead>
                     <tr>

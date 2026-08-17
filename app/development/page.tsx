@@ -196,7 +196,7 @@ export default function DevelopmentPage() {
 
       <section>
         <h2 style={{ fontSize: 16, marginBottom: 8 }}>Records (most recent first)</h2>
-        <div style={{ overflowX: "auto" }}>
+        <div style={{ overflowX: "auto", minWidth: 0 }}>
           <table style={tableStyle}>
             <thead>
               <tr>

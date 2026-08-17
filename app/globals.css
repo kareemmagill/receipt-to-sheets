@@ -31,6 +31,23 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Every page's <main> is a flex item of body (a column flex container)
+   above. A flex item's default automatic minimum width is based on its
+   *content's* min-content size, not the available space -- so any
+   descendant with a wide intrinsic size (an image, a horizontally
+   scrollable row of thumbnails, a wide table) could force main, and with
+   it the whole page, wider than the viewport, with body's overflow-x:
+   hidden above then clipping the excess invisibly and no way to pinch-
+   zoom out of a hard CSS clip (real bug reported with a screenshot,
+   Kareem, 2026-08-17 -- fixing individual images wasn't enough, since any
+   future wide content anywhere on any page could reintroduce the same
+   class of bug). min-width: 0 overrides that default so main always
+   shrinks to fit the real viewport instead, and any actually-wide content
+   inside it is responsible for its own internal scrolling. */
+main {
+  min-width: 0;
+}
+
 * {
   box-sizing: border-box;
   padding: 0;
