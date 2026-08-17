@@ -493,11 +493,6 @@ export default function Home() {
                 onError={() => setFailedThumbnailUrl(duplicateSlip.photoThumbnailUrl ?? null)}
                 style={{ maxWidth: "100%", height: "auto", display: "block", borderRadius: 8, border: "1px solid #ccc" }}
               />
-              {duplicateSlip.photoLink && (
-                <a href={duplicateSlip.photoLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#777" }}>
-                  Open in Google Drive
-                </a>
-              )}
             </div>
           ) : (
             duplicateSlip.photoLink && (
