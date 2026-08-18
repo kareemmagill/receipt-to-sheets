@@ -16,6 +16,8 @@ import { usePageTitle } from "@/lib/usePageTitle";
 import { SlipLayout } from "@/components/SlipLayout";
 import { ExistingOrderRecap } from "@/components/ExistingOrderRecap";
 import { formatEnteredAt } from "@/lib/formatEnteredAt";
+import type { ApiUsageSummary } from "@/lib/apiUsageLog";
+import { AiCostSummary } from "@/components/AiCostSummary";
 import { takePendingUploadHandoff } from "@/lib/pendingUploadHandoff";
 
 // Approximate, hand-set -- there's no live exchange-rate feed wired up.
@@ -85,13 +87,11 @@ export default function Home() {
   const [userName, setUserName] = useState("");
   // Running estimate of what this app's Claude API calls have cost so far
   // (Kareem, 2026-08-17) -- null while loading/unavailable, in which case
-  // nothing renders rather than showing a misleading ₱0.00. scanCount/
-  // scanCostUsd cover /api/extract calls specifically (one per slip
-  // scanned), separate from totalCostUsd which also includes Ask the
-  // Sales Data's query cost -- added 2026-08-18 so the per-scan price is
-  // visible while still on the pricier model, before switching to a
-  // cheaper one later.
-  const [usage, setUsage] = useState<{ totalCostUsd: number; scanCount: number; scanCostUsd: number } | null>(null);
+  // nothing renders rather than showing a misleading ₱0.00. See
+  // components/AiCostSummary.tsx for how the headline (scan-only) vs.
+  // expanded per-model breakdown (everything, including Ask the Sales
+  // Data) are split.
+  const [usage, setUsage] = useState<ApiUsageSummary | null>(null);
   // Set when this photo came from the Process Queue page rather than a
   // live capture (see lib/pendingUploadHandoff.ts) -- its Pending Uploads
   // row is only removed once the slip actually saves successfully below,
@@ -106,7 +106,7 @@ export default function Home() {
     fetch("/api/usage-total")
       .then((res) => res.json())
       .then((data) => {
-        if (data.ok) setUsage({ totalCostUsd: data.totalCostUsd, scanCount: data.scanCount, scanCostUsd: data.scanCostUsd });
+        if (data.ok) setUsage({ totalCostUsd: data.totalCostUsd, scanCount: data.scanCount, scanCostUsd: data.scanCostUsd, byModel: data.byModel });
       })
       .catch(() => {});
   }, []);
@@ -450,18 +450,7 @@ export default function Home() {
         </div>
       </div>
 
-      {usage !== null && (
-        <p style={{ fontSize: 15, color: "#999", margin: 0 }}>
-          A.I. Cost so far: ₱{(usage.totalCostUsd * USD_TO_PHP_RATE).toFixed(2)}
-          {usage.scanCount > 0 && (
-            <>
-              {" "}
-              ({usage.scanCount} slip{usage.scanCount === 1 ? "" : "s"} scanned, ₱
-              {((usage.scanCostUsd / usage.scanCount) * USD_TO_PHP_RATE).toFixed(2)}/scan)
-            </>
-          )}
-        </p>
-      )}
+      {usage !== null && <AiCostSummary usage={usage} phpRate={USD_TO_PHP_RATE} />}
 
       {!extraction && (
         <>
