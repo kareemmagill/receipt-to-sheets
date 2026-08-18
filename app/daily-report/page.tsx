@@ -178,6 +178,9 @@ export default function DailyReportPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1 style={{ fontSize: 20 }}>Sales Report</h1>
         <div style={{ display: "flex", gap: 12, fontSize: 13 }}>
+          <Link href="/members-billing" style={{ color: "#555" }}>
+            Members Billing
+          </Link>
           <Link href="/" style={{ color: "#555" }}>
             ← Back to scanner
           </Link>

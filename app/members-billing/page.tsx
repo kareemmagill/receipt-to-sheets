@@ -14,6 +14,9 @@ export default function MembersBillingPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1 style={{ fontSize: 20 }}>Members Billing</h1>
         <div style={{ display: "flex", gap: 12, fontSize: 13 }}>
+          <Link href="/daily-report" style={{ color: "#555" }}>
+            Sales Report
+          </Link>
           <Link href="/" style={{ color: "#555" }}>
             ← Back to scanner
           </Link>
