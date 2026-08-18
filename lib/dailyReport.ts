@@ -1,24 +1,14 @@
 import { readTab } from "./googleSheets";
-import { parseCalendarDate } from "./dateNormalize";
 import { photoLinksBySlipNumber, type PhotoLinkInfo } from "./photoLog";
+import { parseAmount, dateKeyFromRow } from "./salesRowHelpers";
 
 // Sales Orders columns -- see lib/salesOrderRows.ts's header comment for
 // the full layout.
 const NAME_COL = 0;
-const DATE_COL = 2;
 const SLIP_NUM_COL = 3;
 const TERMS_COL = 5;
 const AMOUNT_COL = 13;
 const MEMBER_STATUS_COL = 15;
-
-function pad2(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
-function parseAmount(raw: string): number {
-  const n = parseFloat((raw ?? "").replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(n) ? n : 0;
-}
 
 // A fixed 24h shift applied to the UTC instant before formatting into
 // Asia/Manila is safe regardless of the +8 offset -- the Philippines
@@ -38,12 +28,6 @@ function phtDateKey(offsetDays = 0): string {
   const month = parts.find((p) => p.type === "month")!.value;
   const day = parts.find((p) => p.type === "day")!.value;
   return `${year}-${month}-${day}`;
-}
-
-function dateKeyFromRow(row: string[]): string | null {
-  const parsed = parseCalendarDate(row[DATE_COL] ?? "");
-  if (!parsed) return null;
-  return `${parsed.year}-${pad2(parsed.month)}-${pad2(parsed.day)}`;
 }
 
 /**
