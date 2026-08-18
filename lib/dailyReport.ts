@@ -147,7 +147,10 @@ export interface DailyReport {
 }
 
 export async function computeDailyReport(requestedDateKey?: string): Promise<DailyReport> {
-  const rows = await readTab("Sales Orders");
+  // Neither depends on the other's result -- run concurrently instead of
+  // paying two sequential Sheets round trips (Kareem, 2026-08-19: "make it
+  // run faster").
+  const [rows, allPhotos] = await Promise.all([readTab("Sales Orders"), photoLinksBySlipNumber()]);
   const dateKey = requestedDateKey || resolveDefaultDateKey(rows);
   const slips = aggregateSlipsForDate(rows, dateKey);
 
@@ -162,7 +165,6 @@ export async function computeDailyReport(requestedDateKey?: string): Promise<Dai
   // though it won't appear in any breakdown section.
   const totalSales = slips.reduce((sum, s) => sum + s.total, 0);
 
-  const allPhotos = await photoLinksBySlipNumber();
   const photos: Record<string, PhotoLinkInfo> = {};
   for (const s of slips) {
     const info = allPhotos.get(s.slipNumber);

@@ -2,7 +2,22 @@ import { google } from "googleapis";
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 
-function getAuth() {
+// Cached at module scope, same reasoning as lib/googleDrive.ts's
+// cachedDrive -- building a fresh google.auth.JWT on every call (the old
+// behavior here) throws away the access token googleapis would otherwise
+// cache on that client, forcing a full OAuth token exchange with Google on
+// every single readTab/appendRows/etc. call instead of once per warm
+// serverless instance. Measured cold: ~2.3s for a first call, ~400-500ms
+// per call after -- almost entirely this auth handshake, not the actual
+// Sheets API round trip, on a sheet with all of 18 rows (Kareem,
+// 2026-08-19: "make it run faster"). Real risk of a stale/expired token
+// this misses: none -- the JWT client itself refreshes its access token
+// internally when it expires, that's the whole point of caching it.
+let cachedSheets: ReturnType<typeof google.sheets> | null = null;
+
+function getSheetsClient() {
+  if (cachedSheets) return cachedSheets;
+
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
 
@@ -12,15 +27,14 @@ function getAuth() {
     );
   }
 
-  return new google.auth.JWT({
+  const auth = new google.auth.JWT({
     email,
     key: privateKey,
     scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
-}
 
-function getSheetsClient() {
-  return google.sheets({ version: "v4", auth: getAuth() });
+  cachedSheets = google.sheets({ version: "v4", auth });
+  return cachedSheets;
 }
 
 function quoteTabName(tabName: string) {
