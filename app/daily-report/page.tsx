@@ -5,12 +5,13 @@ import Link from "next/link";
 import type { DailyReport, DailyReportBucket } from "@/lib/dailyReport";
 import type { MonthlyReport, MonthlyCustomerLine, MonthlySlipDetail } from "@/lib/monthlyReport";
 import type { PhotoLinkInfo } from "@/lib/photoLog";
-import type { ExistingOrderSummary } from "@/lib/duplicateCheck";
 import { usePageTitle } from "@/lib/usePageTitle";
 import { DateCalendar } from "@/components/DateCalendar";
 import { MonthCalendar } from "@/components/MonthCalendar";
-import { ExistingOrderRecap } from "@/components/ExistingOrderRecap";
-import { formatEnteredAt } from "@/lib/formatEnteredAt";
+import { SlipViewerModal } from "@/components/SlipViewerModal";
+import { MemberDetailModal } from "@/components/MemberDetailModal";
+import { useSlipViewer } from "@/lib/useSlipViewer";
+import { useMemberDetail } from "@/lib/useMemberDetail";
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -85,31 +86,16 @@ export default function DailyReportPage() {
   const [monthError, setMonthError] = useState<string | null>(null);
   // Which customer's slip breakdown is expanded in the monthly view.
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
-  // Which slip number's viewer is currently open -- opening it never
-  // navigates away from this page (Kareem, 2026-08-17). Now shows the
-  // saved photo alongside a digitised SlipLayout recreation, the same
-  // combined presentation as the Duplicate Slip screen (Kareem,
-  // 2026-08-18), so a second lookup fetches the full item/field detail
-  // that computeDailyReport doesn't carry per slip.
-  const [viewingSlip, setViewingSlip] = useState<string | null>(null);
-  const [failedPhotoSlip, setFailedPhotoSlip] = useState<string | null>(null);
-  const [slipDetail, setSlipDetail] = useState<ExistingOrderSummary | null>(null);
-  const [slipDetailStatus, setSlipDetailStatus] = useState<"loading" | "ready" | "error">("loading");
 
-  function handleViewSlip(slipNumber: string) {
-    setViewingSlip(slipNumber);
-    setFailedPhotoSlip(null);
-    setSlipDetail(null);
-    setSlipDetailStatus("loading");
-    fetch(`/api/slip-detail?slipNumber=${encodeURIComponent(slipNumber)}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (!data.ok) throw new Error(data.error ?? "Unknown error");
-        setSlipDetail(data.existing);
-        setSlipDetailStatus("ready");
-      })
-      .catch(() => setSlipDetailStatus("error"));
-  }
+  // Opening a slip never navigates away from this page (Kareem,
+  // 2026-08-17) -- shows the saved photo alongside a digitised SlipLayout
+  // recreation, the same combined presentation as the Duplicate Slip
+  // screen (Kareem, 2026-08-18). Shared with Members Billing and the
+  // Monthly Sales "view all sales" link, all via the same hook/component
+  // (Kareem, 2026-08-20).
+  const { viewingSlip, failedPhotoSlip, setFailedPhotoSlip, slipDetail, slipDetailStatus, viewSlip, closeSlip } =
+    useSlipViewer();
+  const { viewingMember, memberDetail, memberDetailStatus, viewMember, closeMember } = useMemberDetail();
 
   function applyResponse(data: DailyReportResponse) {
     if (!data.ok || !data.report) {
@@ -135,7 +121,7 @@ export default function DailyReportPage() {
   function handleDateChange(newDate: string) {
     setStatus("loading");
     setError(null);
-    setViewingSlip(null);
+    closeSlip();
     setFailedPhotoSlip(null);
     fetchDailyReport(newDate).then(applyResponse).catch(handleFetchError);
   }
@@ -164,7 +150,7 @@ export default function DailyReportPage() {
 
   function handleToggleView(mode: "day" | "month") {
     setViewMode(mode);
-    setViewingSlip(null);
+    closeSlip();
     if (mode === "month" && monthStatus === "idle") {
       setMonthStatus("loading");
       fetchMonthlyReport().then(applyMonthResponse).catch(handleMonthFetchError);
@@ -175,7 +161,7 @@ export default function DailyReportPage() {
     setMonthStatus("loading");
     setMonthError(null);
     setSelectedCustomer(null);
-    setViewingSlip(null);
+    closeSlip();
     fetchMonthlyReport(newMonth).then(applyMonthResponse).catch(handleMonthFetchError);
   }
 
@@ -241,7 +227,7 @@ export default function DailyReportPage() {
                   <p style={{ color: "#b00020", fontWeight: 600, margin: "0 0 8px 0", fontSize: 13 }}>
                     ⚠ Non-Member(s) marked Not Paid -- shouldn&apos;t happen going forward, needs a look
                   </p>
-                  <DetailTable bucket={report.nonMembersNotPaid} photos={report.photos} onViewPhoto={handleViewSlip} />
+                  <DetailTable bucket={report.nonMembersNotPaid} photos={report.photos} onViewPhoto={viewSlip} />
                 </div>
               )}
 
@@ -249,19 +235,19 @@ export default function DailyReportPage() {
                 title="Members Not Paid"
                 bucket={report.membersNotPaid}
                 photos={report.photos}
-                onViewPhoto={handleViewSlip}
+                onViewPhoto={viewSlip}
               />
               <DetailSection
                 title="Members Paid"
                 bucket={report.membersPaid}
                 photos={report.photos}
-                onViewPhoto={handleViewSlip}
+                onViewPhoto={viewSlip}
               />
               <DetailSection
                 title="Non-Members Paid"
                 bucket={report.nonMembersPaid}
                 photos={report.photos}
-                onViewPhoto={handleViewSlip}
+                onViewPhoto={viewSlip}
               />
             </>
           )}
@@ -303,7 +289,8 @@ export default function DailyReportPage() {
                     slipsByCustomer={monthReport.slipsByCustomer}
                     selectedCustomer={selectedCustomer}
                     onSelectCustomer={setSelectedCustomer}
-                    onViewSlip={handleViewSlip}
+                    onViewSlip={viewSlip}
+                    onViewMember={viewMember}
                   />
                 </div>
               )}
@@ -315,7 +302,8 @@ export default function DailyReportPage() {
                 slipsByCustomer={monthReport.slipsByCustomer}
                 selectedCustomer={selectedCustomer}
                 onSelectCustomer={setSelectedCustomer}
-                onViewSlip={handleViewSlip}
+                onViewSlip={viewSlip}
+                onViewMember={viewMember}
               />
               <MonthlyCustomerList
                 title="Members Paid"
@@ -323,7 +311,8 @@ export default function DailyReportPage() {
                 slipsByCustomer={monthReport.slipsByCustomer}
                 selectedCustomer={selectedCustomer}
                 onSelectCustomer={setSelectedCustomer}
-                onViewSlip={handleViewSlip}
+                onViewSlip={viewSlip}
+                onViewMember={viewMember}
               />
               <MonthlyCustomerList
                 title="Non-Members Paid"
@@ -331,66 +320,34 @@ export default function DailyReportPage() {
                 slipsByCustomer={monthReport.slipsByCustomer}
                 selectedCustomer={selectedCustomer}
                 onSelectCustomer={setSelectedCustomer}
-                onViewSlip={handleViewSlip}
+                onViewSlip={viewSlip}
+                onViewMember={viewMember}
               />
             </>
           )}
         </>
       )}
 
-      {viewingSlip && (
-        <div
-          onClick={() => setViewingSlip(null)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.85)",
-            zIndex: 1000,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "flex-start",
-            overflowY: "auto",
-            padding: 16,
-            gap: 10,
-          }}
-        >
-          {slipDetailStatus === "loading" && (
-            <p style={{ color: "#ccc", fontSize: 13 }}>Loading digitised version…</p>
-          )}
-          {slipDetailStatus === "error" && (
-            <p style={{ color: "#f5a3a3", fontSize: 13 }}>Couldn&apos;t load the digitised version.</p>
-          )}
-          {slipDetailStatus === "ready" && slipDetail && (
-            <div style={{ width: "100%", maxWidth: 600, display: "flex", flexDirection: "column", gap: 4 }}>
-              {slipDetail.enteredAt && (
-                <p style={{ color: "#ccc", fontSize: 12, margin: 0 }}>
-                  Digitized{slipDetail.enteredBy ? ` by ${slipDetail.enteredBy}` : ""} ({formatEnteredAt(slipDetail.enteredAt)})
-                </p>
-              )}
-              <ExistingOrderRecap order={slipDetail} />
-            </div>
-          )}
-          {slipDetailStatus === "ready" && !slipDetail && !report?.photos[viewingSlip]?.photoThumbnailUrl && (
-            <div style={{ background: "#fff", borderRadius: 8, padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
-              <p style={{ margin: 0, fontSize: 13 }}>No record found for this slip.</p>
-            </div>
-          )}
+      {viewingMember && (
+        <MemberDetailModal
+          memberName={viewingMember}
+          detail={memberDetail}
+          status={memberDetailStatus}
+          onClose={closeMember}
+          onViewSlip={viewSlip}
+        />
+      )}
 
-          {(() => {
-            const photo = slipDetail ?? report?.photos[viewingSlip];
-            if (!photo?.photoThumbnailUrl || failedPhotoSlip === viewingSlip) return null;
-            return (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={photo.photoThumbnailUrl}
-                alt={`Slip #${viewingSlip}`}
-                onError={() => setFailedPhotoSlip(viewingSlip)}
-                style={{ maxWidth: "100%", maxHeight: "60vh", borderRadius: 8 }}
-              />
-            );
-          })()}
-        </div>
+      {viewingSlip && (
+        <SlipViewerModal
+          slipNumber={viewingSlip}
+          slipDetail={slipDetail}
+          slipDetailStatus={slipDetailStatus}
+          failedPhotoSlip={failedPhotoSlip}
+          onFailedPhoto={setFailedPhotoSlip}
+          onClose={closeSlip}
+          fallbackPhoto={report?.photos[viewingSlip]}
+        />
       )}
     </main>
   );
@@ -521,6 +478,7 @@ function MonthlyCustomerList({
   selectedCustomer,
   onSelectCustomer,
   onViewSlip,
+  onViewMember,
 }: {
   title?: string;
   lines: MonthlyCustomerLine[];
@@ -529,6 +487,10 @@ function MonthlyCustomerList({
   selectedCustomer: string | null;
   onSelectCustomer: (customer: string | null) => void;
   onViewSlip: (slipNumber: string) => void;
+  // Opens that member's full (all-time) billing picture -- distinct from
+  // onSelectCustomer's inline this-month-only breakdown below (Kareem,
+  // 2026-08-20: "add a link on the members name to show all there sales").
+  onViewMember: (customer: string) => void;
 }) {
   return (
     <section>
@@ -541,10 +503,19 @@ function MonthlyCustomerList({
           const isOpen = selectedCustomer === l.customer;
           return (
             <div key={l.customer}>
-              <button type="button" onClick={() => onSelectCustomer(isOpen ? null : l.customer)} style={customerRowStyle}>
-                <span style={{ textDecoration: "underline", color: "#1a73e8" }}>{l.customer}</span>
-                <span style={{ fontWeight: 600, color: color ?? "#171717" }}>{formatMoney(l.total)}</span>
-              </button>
+              <div style={customerRowStyle}>
+                <button type="button" onClick={() => onViewMember(l.customer)} style={customerNameLinkStyle}>
+                  {l.customer}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSelectCustomer(isOpen ? null : l.customer)}
+                  style={customerAmountButtonStyle}
+                >
+                  <span style={{ fontWeight: 600, color: color ?? "#171717" }}>{formatMoney(l.total)}</span>
+                  <span style={{ fontSize: 11, color: "#999" }}>{isOpen ? "▲" : "▼"}</span>
+                </button>
+              </div>
               {isOpen && (
                 <div style={{ padding: "4px 0 10px 0" }}>
                   <SlipBreakdownTable slips={slipsByCustomer[l.customer] ?? []} onViewSlip={onViewSlip} />
@@ -632,15 +603,33 @@ function toggleButtonStyle(active: boolean): React.CSSProperties {
 const customerRowStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
+  alignItems: "center",
   width: "100%",
   padding: "6px 4px",
-  border: "none",
   borderBottom: "1px solid #eee",
+  fontSize: 13,
+};
+
+const customerNameLinkStyle: React.CSSProperties = {
+  padding: 0,
+  border: "none",
   background: "none",
   cursor: "pointer",
-  fontSize: 13,
   font: "inherit",
-  color: "#111",
+  textDecoration: "underline",
+  color: "#1a73e8",
+  textAlign: "left",
+};
+
+const customerAmountButtonStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  padding: 0,
+  border: "none",
+  background: "none",
+  cursor: "pointer",
+  font: "inherit",
 };
 
 const slipLinkStyle: React.CSSProperties = {

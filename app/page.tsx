@@ -16,6 +16,7 @@ import { usePageTitle } from "@/lib/usePageTitle";
 import { SlipLayout } from "@/components/SlipLayout";
 import { ExistingOrderRecap } from "@/components/ExistingOrderRecap";
 import { formatEnteredAt } from "@/lib/formatEnteredAt";
+import { MembersBilling } from "@/components/MembersBilling";
 
 // Approximate, hand-set -- there's no live exchange-rate feed wired up.
 // Anthropic bills in USD; this is purely a display conversion for
@@ -504,6 +505,8 @@ export default function Home() {
           >
             Sales Report
           </Link>
+
+          <MembersBilling />
         </>
       )}
 
