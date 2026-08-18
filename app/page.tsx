@@ -14,6 +14,7 @@ import { getStoredUserName, setStoredUserName } from "@/lib/userName";
 import { SAMPLE_SLIPS } from "@/lib/sampleSlips";
 import { usePageTitle } from "@/lib/usePageTitle";
 import { SlipLayout } from "@/components/SlipLayout";
+import { ExistingOrderRecap } from "@/components/ExistingOrderRecap";
 
 // Approximate, hand-set -- there's no live exchange-rate feed wired up.
 // Anthropic bills in USD; this is purely a display conversion for
@@ -700,29 +701,6 @@ function OrderSummary({ order }: { order: EditableOrder }) {
       />
       {order.memo && <p style={{ fontSize: 13, color: "#777", margin: 0 }}>Memo: {order.memo}</p>}
     </div>
-  );
-}
-
-function ExistingOrderRecap({ order }: { order: ExistingOrderSummary }) {
-  const total = order.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-
-  return (
-    <SlipLayout
-      slipNumber={order.slipNumber}
-      slipType={order.slipType}
-      customer={order.customer}
-      waitress={order.waitress}
-      date={order.date}
-      memberStatus={order.memberStatus}
-      items={order.items.map((item) => ({
-        qty: item.qty,
-        description: item.description,
-        itemCode: item.item,
-        amount: item.amount,
-      }))}
-      total={total}
-      terms={order.terms}
-    />
   );
 }
 

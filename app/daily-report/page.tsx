@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { DailyReport, DailyReportBucket } from "@/lib/dailyReport";
 import type { PhotoLinkInfo } from "@/lib/photoLog";
+import type { ExistingOrderSummary } from "@/lib/duplicateCheck";
 import { usePageTitle } from "@/lib/usePageTitle";
 import { DateCalendar } from "@/components/DateCalendar";
+import { ExistingOrderRecap } from "@/components/ExistingOrderRecap";
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -41,10 +43,31 @@ export default function DailyReportPage() {
   const [report, setReport] = useState<DailyReport | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
-  // Which slip number's photo is currently shown in the inline viewer --
-  // opening it never navigates away from this page (Kareem, 2026-08-17).
+  // Which slip number's viewer is currently open -- opening it never
+  // navigates away from this page (Kareem, 2026-08-17). Now shows the
+  // saved photo alongside a digitised SlipLayout recreation, the same
+  // combined presentation as the Duplicate Slip screen (Kareem,
+  // 2026-08-18), so a second lookup fetches the full item/field detail
+  // that computeDailyReport doesn't carry per slip.
   const [viewingSlip, setViewingSlip] = useState<string | null>(null);
   const [failedPhotoSlip, setFailedPhotoSlip] = useState<string | null>(null);
+  const [slipDetail, setSlipDetail] = useState<ExistingOrderSummary | null>(null);
+  const [slipDetailStatus, setSlipDetailStatus] = useState<"loading" | "ready" | "error">("loading");
+
+  function handleViewSlip(slipNumber: string) {
+    setViewingSlip(slipNumber);
+    setFailedPhotoSlip(null);
+    setSlipDetail(null);
+    setSlipDetailStatus("loading");
+    fetch(`/api/slip-detail?slipNumber=${encodeURIComponent(slipNumber)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.ok) throw new Error(data.error ?? "Unknown error");
+        setSlipDetail(data.existing);
+        setSlipDetailStatus("ready");
+      })
+      .catch(() => setSlipDetailStatus("error"));
+  }
 
   function applyResponse(data: DailyReportResponse) {
     if (!data.ok || !data.report) {
@@ -126,7 +149,7 @@ export default function DailyReportPage() {
               <p style={{ color: "#b00020", fontWeight: 600, margin: "0 0 8px 0", fontSize: 13 }}>
                 ⚠ Non-Member(s) marked Not Paid -- shouldn&apos;t happen going forward, needs a look
               </p>
-              <DetailTable bucket={report.nonMembersNotPaid} photos={report.photos} onViewPhoto={setViewingSlip} />
+              <DetailTable bucket={report.nonMembersNotPaid} photos={report.photos} onViewPhoto={handleViewSlip} />
             </div>
           )}
 
@@ -134,24 +157,24 @@ export default function DailyReportPage() {
             title="Members Not Paid"
             bucket={report.membersNotPaid}
             photos={report.photos}
-            onViewPhoto={setViewingSlip}
+            onViewPhoto={handleViewSlip}
           />
           <DetailSection
             title="Members Paid"
             bucket={report.membersPaid}
             photos={report.photos}
-            onViewPhoto={setViewingSlip}
+            onViewPhoto={handleViewSlip}
           />
           <DetailSection
             title="Non-Members Paid"
             bucket={report.nonMembersPaid}
             photos={report.photos}
-            onViewPhoto={setViewingSlip}
+            onViewPhoto={handleViewSlip}
           />
         </>
       )}
 
-      {viewingSlip && report?.photos[viewingSlip] && (
+      {viewingSlip && (
         <div
           onClick={() => setViewingSlip(null)}
           style={{
@@ -162,7 +185,8 @@ export default function DailyReportPage() {
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            justifyContent: "center",
+            justifyContent: "flex-start",
+            overflowY: "auto",
             padding: 16,
             gap: 10,
           }}
@@ -174,24 +198,38 @@ export default function DailyReportPage() {
             </button>
           </div>
 
-          {report.photos[viewingSlip].photoThumbnailUrl && failedPhotoSlip !== viewingSlip ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={report.photos[viewingSlip].photoThumbnailUrl}
-              alt={`Slip #${viewingSlip}`}
-              onClick={(e) => e.stopPropagation()}
-              onError={() => setFailedPhotoSlip(viewingSlip)}
-              style={{ maxWidth: "100%", maxHeight: "80vh", borderRadius: 8 }}
-            />
-          ) : (
+          {(() => {
+            const photo = slipDetail ?? report?.photos[viewingSlip];
+            if (!photo?.photoThumbnailUrl || failedPhotoSlip === viewingSlip) return null;
+            return (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={photo.photoThumbnailUrl}
+                alt={`Slip #${viewingSlip}`}
+                onClick={(e) => e.stopPropagation()}
+                onError={() => setFailedPhotoSlip(viewingSlip)}
+                style={{ maxWidth: "100%", maxHeight: "60vh", borderRadius: 8 }}
+              />
+            );
+          })()}
+
+          {slipDetailStatus === "loading" && (
+            <p style={{ color: "#ccc", fontSize: 13 }}>Loading digitised version…</p>
+          )}
+          {slipDetailStatus === "error" && (
+            <p style={{ color: "#f5a3a3", fontSize: 13 }}>Couldn&apos;t load the digitised version.</p>
+          )}
+          {slipDetailStatus === "ready" && slipDetail && (
+            <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 600 }}>
+              <ExistingOrderRecap order={slipDetail} />
+            </div>
+          )}
+          {slipDetailStatus === "ready" && !slipDetail && !report?.photos[viewingSlip]?.photoThumbnailUrl && (
             <div
               onClick={(e) => e.stopPropagation()}
               style={{ background: "#fff", borderRadius: 8, padding: 16, display: "flex", flexDirection: "column", gap: 8 }}
             >
-              <p style={{ margin: 0, fontSize: 13 }}>Couldn&apos;t load a preview.</p>
-              <a href={report.photos[viewingSlip].photoLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13 }}>
-                Open in Google Drive
-              </a>
+              <p style={{ margin: 0, fontSize: 13 }}>No record found for this slip.</p>
             </div>
           )}
         </div>
