@@ -116,3 +116,26 @@ export async function uploadOrderPhoto(params: {
 export function driveThumbnailUrl(fileId: string, sizePx = 1200): string {
   return `https://drive.google.com/thumbnail?id=${fileId}&sz=w${sizePx}`;
 }
+
+/**
+ * Reads a Drive file's bytes back out as a data URL -- used to re-feed a
+ * queued-for-later photo (see lib/pendingUploads.ts) into the same
+ * /api/extract flow a live camera capture uses, without the client ever
+ * needing to fetch cross-origin Drive URLs itself (Kareem, 2026-08-20:
+ * "upload a bunch of pictures for processing later"). Server-side only --
+ * goes through the same authorized Drive client as the upload, so no
+ * CORS/sign-in concerns the way a client-side fetch of a Drive URL would
+ * have.
+ */
+export async function downloadFileAsDataUrl(fileId: string): Promise<string> {
+  const drive = getDriveClient();
+
+  const [meta, media] = await Promise.all([
+    drive.files.get({ fileId, fields: "mimeType" }),
+    drive.files.get({ fileId, alt: "media" }, { responseType: "arraybuffer" }),
+  ]);
+
+  const mimeType = meta.data.mimeType || "image/jpeg";
+  const base64 = Buffer.from(media.data as ArrayBuffer).toString("base64");
+  return `data:${mimeType};base64,${base64}`;
+}

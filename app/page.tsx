@@ -16,6 +16,7 @@ import { usePageTitle } from "@/lib/usePageTitle";
 import { SlipLayout } from "@/components/SlipLayout";
 import { ExistingOrderRecap } from "@/components/ExistingOrderRecap";
 import { formatEnteredAt } from "@/lib/formatEnteredAt";
+import { takePendingUploadHandoff } from "@/lib/pendingUploadHandoff";
 
 // Approximate, hand-set -- there's no live exchange-rate feed wired up.
 // Anthropic bills in USD; this is purely a display conversion for
@@ -91,6 +92,15 @@ export default function Home() {
   // visible while still on the pricier model, before switching to a
   // cheaper one later.
   const [usage, setUsage] = useState<{ totalCostUsd: number; scanCount: number; scanCostUsd: number } | null>(null);
+  // Set when this photo came from the Process Queue page rather than a
+  // live capture (see lib/pendingUploadHandoff.ts) -- its Pending Uploads
+  // row is only removed once the slip actually saves successfully below,
+  // not just on opening it, so an abandoned/failed attempt leaves it in
+  // the queue to try again (Kareem, 2026-08-20).
+  const [pendingQueueRowNumber, setPendingQueueRowNumber] = useState<number | null>(null);
+  // How many photos are sitting in the Process Queue -- shown as a badge
+  // on that button so staff can see there's backlog without opening it.
+  const [pendingQueueCount, setPendingQueueCount] = useState(0);
 
   useEffect(() => {
     fetch("/api/usage-total")
@@ -99,6 +109,33 @@ export default function Home() {
         if (data.ok) setUsage({ totalCostUsd: data.totalCostUsd, scanCount: data.scanCount, scanCostUsd: data.scanCostUsd });
       })
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/pending-uploads")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.ok) setPendingQueueCount(data.uploads.length);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    // Deferred via .then(), same reasoning as the userName prompt effect
+    // above -- keeps the setState calls out of the synchronous effect body.
+    Promise.resolve().then(() => {
+      const handoff = takePendingUploadHandoff();
+      if (!handoff) return;
+      setStatus("idle");
+      setError(null);
+      setExtraction(null);
+      setSaveStatus("idle");
+      setSaveError(null);
+      setExistingOrder(null);
+      setDuplicateSlip(null);
+      setImageDataUrl(handoff.imageDataUrl);
+      setPendingQueueRowNumber(handoff.rowNumber);
+    });
   }, []);
 
   useEffect(() => {
@@ -270,6 +307,7 @@ export default function Home() {
     setDeleteStatus("idle");
     setDeleteError(null);
     setImageDataUrl(null);
+    setPendingQueueRowNumber(null);
   }
 
   function handleEditSaved() {
@@ -357,6 +395,19 @@ export default function Home() {
       setExistingOrder(null);
       setDeleteStatus("idle");
       setSaveStatus("success");
+
+      // Only now that the slip actually saved -- clears this photo out of
+      // the Process Queue. Fire-and-forget: a failure here just leaves a
+      // now-redundant row in the queue for someone to notice and clear
+      // manually, not something worth blocking the save success screen on.
+      if (pendingQueueRowNumber !== null) {
+        fetch("/api/pending-uploads/remove", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rowNumber: pendingQueueRowNumber }),
+        }).catch(() => {});
+        setPendingQueueRowNumber(null);
+      }
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err));
       setSaveStatus("error");
@@ -510,6 +561,20 @@ export default function Home() {
             style={{ ...buttonStyle, textAlign: "center", textDecoration: "none", display: "block" }}
           >
             Members Billing
+          </Link>
+
+          <Link
+            href="/upload-slips"
+            style={{ ...buttonStyle, textAlign: "center", textDecoration: "none", display: "block" }}
+          >
+            Upload Slips
+          </Link>
+
+          <Link
+            href="/process-queue"
+            style={{ ...buttonStyle, textAlign: "center", textDecoration: "none", display: "block" }}
+          >
+            Process Queue{pendingQueueCount ? ` (${pendingQueueCount})` : ""}
           </Link>
         </>
       )}
