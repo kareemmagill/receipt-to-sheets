@@ -11,6 +11,8 @@ const AR_COL = 4;
 const QTY_COL = 8;
 const DESC_COL = 11;
 const AMOUNT_COL = 13;
+const ENTERED_AT_COL = 16;
+const ENTERED_BY_COL = 17;
 
 // Photo Log columns -- see PHOTO_LOG_HEADER in app/api/save/route.ts.
 const LOG_SLIP_COL = 1;
@@ -31,6 +33,12 @@ interface Record {
   total: number;
   rowCount: number;
   photoLink: string | null;
+  // Who/what digitized this record and when -- empty for legacy rows
+  // saved before these columns existed (2026-08-17), see
+  // buildSalesOrderRows (Kareem, 2026-08-20: "include the person who
+  // digitized the slip, and timestamp").
+  enteredBy: string;
+  enteredAt: string;
 }
 
 // Grouped the same way as app/api/dev/delete-last/route.ts: consecutive rows
@@ -66,6 +74,8 @@ function buildRecords(dataRows: string[][]): Record[] {
       total,
       rowCount: group.length,
       photoLink: null, // filled in by the caller, which has the Photo Log lookup
+      enteredBy: (group[0][ENTERED_BY_COL] ?? "").trim(),
+      enteredAt: (group[0][ENTERED_AT_COL] ?? "").trim(),
     });
   }
   return records;

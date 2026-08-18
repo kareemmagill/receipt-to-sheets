@@ -10,6 +10,7 @@ import { usePageTitle } from "@/lib/usePageTitle";
 import { DateCalendar } from "@/components/DateCalendar";
 import { MonthCalendar } from "@/components/MonthCalendar";
 import { ExistingOrderRecap } from "@/components/ExistingOrderRecap";
+import { formatEnteredAt } from "@/lib/formatEnteredAt";
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -361,7 +362,12 @@ export default function DailyReportPage() {
             <p style={{ color: "#f5a3a3", fontSize: 13 }}>Couldn&apos;t load the digitised version.</p>
           )}
           {slipDetailStatus === "ready" && slipDetail && (
-            <div style={{ width: "100%", maxWidth: 600 }}>
+            <div style={{ width: "100%", maxWidth: 600, display: "flex", flexDirection: "column", gap: 4 }}>
+              {slipDetail.enteredAt && (
+                <p style={{ color: "#ccc", fontSize: 12, margin: 0 }}>
+                  Digitized{slipDetail.enteredBy ? ` by ${slipDetail.enteredBy}` : ""} ({formatEnteredAt(slipDetail.enteredAt)})
+                </p>
+              )}
               <ExistingOrderRecap order={slipDetail} />
             </div>
           )}

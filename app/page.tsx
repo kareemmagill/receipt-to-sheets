@@ -15,6 +15,7 @@ import { SAMPLE_SLIPS } from "@/lib/sampleSlips";
 import { usePageTitle } from "@/lib/usePageTitle";
 import { SlipLayout } from "@/components/SlipLayout";
 import { ExistingOrderRecap } from "@/components/ExistingOrderRecap";
+import { formatEnteredAt } from "@/lib/formatEnteredAt";
 
 // Approximate, hand-set -- there's no live exchange-rate feed wired up.
 // Anthropic bills in USD; this is purely a display conversion for
@@ -648,29 +649,6 @@ export default function Home() {
 
 function sumAmounts(items: EditableOrder["items"]): number {
   return items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-}
-
-// Stored as ISO/UTC (see buildSalesOrderRows) -- displayed in the viewer's
-// own local time, collapsed to whichever of Just Now/Today/Yesterday/date
-// reads most naturally on the Duplicate Slip banner (Kareem, 2026-08-18:
-// "change text to #xxxxx already entered by Kareem (Just Now/Today/
-// Yesterday/Date)"). Falls through to dd/mm/yyyy for anything older.
-function formatEnteredAt(iso: string): string {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-
-  const now = new Date();
-  if (now.getTime() - d.getTime() < 60_000) return "Just Now";
-
-  const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-  const dayDiff = Math.round((startOfDay(now) - startOfDay(d)) / 86_400_000);
-  if (dayDiff === 0) return "Today";
-  if (dayDiff === 1) return "Yesterday";
-
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  return `${dd}/${mm}/${yyyy}`;
 }
 
 function OrderSummary({ order }: { order: EditableOrder }) {

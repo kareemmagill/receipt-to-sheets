@@ -17,6 +17,22 @@ interface Record {
   summary: string;
   total: number;
   photoLink: string | null;
+  enteredBy: string;
+  enteredAt: string;
+}
+
+// Timestamp, not a relative label -- this table is a diagnostic list of
+// many records at once, where "Just Now" from an earlier scan would read
+// wrong by the time anyone looks at it (Kareem, 2026-08-20).
+function formatDigitizedAt(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${dd}/${mm}/${yyyy}, ${hh}:${min}`;
 }
 
 function describeOrder(order: { slipNumber: string; arNumber: string; customer: string; itemCount: number }) {
@@ -209,6 +225,8 @@ export default function DevelopmentPage() {
                 <th style={thStyle}>Order Summary</th>
                 <th style={{ ...thStyle, textAlign: "right" }}>Total</th>
                 <th style={thStyle}>Photo</th>
+                <th style={thStyle}>Digitized By</th>
+                <th style={thStyle}>Digitized At</th>
               </tr>
             </thead>
             <tbody>
@@ -228,18 +246,20 @@ export default function DevelopmentPage() {
                       "—"
                     )}
                   </td>
+                  <td style={tdStyle}>{r.enteredBy || "—"}</td>
+                  <td style={tdStyle}>{r.enteredAt ? formatDigitizedAt(r.enteredAt) : "—"}</td>
                 </tr>
               ))}
               {records && records.length === 0 && (
                 <tr>
-                  <td style={tdStyle} colSpan={6}>
+                  <td style={tdStyle} colSpan={8}>
                     No records.
                   </td>
                 </tr>
               )}
               {!records && (
                 <tr>
-                  <td style={tdStyle} colSpan={6}>
+                  <td style={tdStyle} colSpan={8}>
                     Loading…
                   </td>
                 </tr>
