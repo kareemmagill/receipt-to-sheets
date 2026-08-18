@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { listPendingUploads, addPendingUpload } from "@/lib/pendingUploads";
-import { uploadOrderPhoto } from "@/lib/googleDrive";
-import { makeId } from "@/lib/makeId";
 
 export async function GET() {
   try {
@@ -15,30 +13,25 @@ export async function GET() {
   }
 }
 
-// Queues one photo for later processing -- the client has already resized
-// it (see app/upload-slips/page.tsx), same 1568px cap as a live scan's
-// OCR-read copy, since unlike the archival copy saved after a slip is
-// digitized, this photo IS what OCR will read once someone processes the
-// queue (Kareem, 2026-08-20).
+// Appends one row to the Pending Uploads tab for a photo already uploaded
+// to Drive via POST /api/pending-uploads/upload-photo. Kept as its own,
+// separate step (not doing the Drive upload here too) so the client can
+// call the Drive upload with real concurrency while still only ever
+// calling this one sequentially -- see that route's comment for why.
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const imageDataUrl: string | undefined = body?.imageDataUrl;
+    const photoLink: string | undefined = body?.photoLink;
     const uploadedBy: string = (body?.uploadedBy ?? "").trim();
     const device: string = (body?.device ?? "").trim();
 
-    if (!imageDataUrl) {
-      return NextResponse.json({ ok: false, error: "imageDataUrl is required" }, { status: 400 });
+    if (!photoLink) {
+      return NextResponse.json({ ok: false, error: "photoLink is required" }, { status: 400 });
     }
 
-    const { webViewLink } = await uploadOrderPhoto({
-      imageDataUrl,
-      fileName: `pending_${makeId("slip")}.jpg`,
-    });
+    await addPendingUpload({ photoLink, uploadedBy, device });
 
-    await addPendingUpload({ photoLink: webViewLink, uploadedBy, device });
-
-    return NextResponse.json({ ok: true, photoLink: webViewLink });
+    return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : String(err) },

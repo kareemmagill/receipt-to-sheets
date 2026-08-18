@@ -20,6 +20,14 @@ interface UploadResult {
   message: string;
 }
 
+// How many photos upload to Drive at once. The Drive upload itself has no
+// shared state so any number is safe, but the sheet-row append behind it
+// isn't safe to run concurrently (see app/api/pending-uploads/upload-
+// photo/route.ts's comment) -- kept modest so a big batch doesn't also
+// spike memory (each in-flight upload holds its resized image in memory)
+// or make one slow upload block noticeably more of the batch behind it.
+const UPLOAD_CONCURRENCY = 3;
+
 // Lets staff snap/select a batch of slip photos and get them safely into
 // Drive right away, without reading or reviewing any of them yet -- the
 // actual digitizing happens later, from the queue this creates (see
@@ -64,8 +72,20 @@ export default function UploadSlipsPage() {
   async function handleUploadAll() {
     setUploading(true);
 
-    for (const photo of photos) {
+    // The Drive upload (slow, network-bound) runs up to UPLOAD_CONCURRENCY
+    // at once via the worker pool below. The sheet-row append behind it
+    // does not -- appendRows reads the tab's current length then writes at
+    // that computed row (see lib/googleSheets.ts), so concurrent appends
+    // could compute the same "next row" and one would silently overwrite
+    // the other. Chaining every append onto this one promise forces them
+    // to run strictly one at a time regardless of upload order (Kareem,
+    // 2026-08-20: "if parallel uploading is possible then use it").
+    let appendChain: Promise<void> = Promise.resolve();
+
+    async function processOne(photo: QueuedPhoto) {
       setResult(photo.id, "uploading", "Uploading…");
+
+      let photoLink: string;
       try {
         // Same cap /api/extract's own OCR-read copy uses -- this photo IS
         // the eventual OCR source (there's no separate live-camera frame
@@ -73,25 +93,51 @@ export default function UploadSlipsPage() {
         // at OCR quality, not the lower archival-only cap used once a
         // slip's already been read.
         const resized = await resizeImage(photo.dataUrl);
-        const res = await fetch("/api/pending-uploads", {
+        const res = await fetch("/api/pending-uploads/upload-photo", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            imageDataUrl: resized,
-            uploadedBy: getStoredUserName(),
-            device: getDeviceLabel(),
-          }),
+          body: JSON.stringify({ imageDataUrl: resized }),
         });
         const data = await res.json();
         if (!data.ok) {
           setResult(photo.id, "error", data.error ?? "Upload failed");
-          continue;
+          return;
         }
-        setResult(photo.id, "done", "Uploaded");
+        photoLink = data.photoLink;
       } catch (err) {
         setResult(photo.id, "error", err instanceof Error ? err.message : String(err));
+        return;
+      }
+
+      appendChain = appendChain.then(async () => {
+        try {
+          const res = await fetch("/api/pending-uploads", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ photoLink, uploadedBy: getStoredUserName(), device: getDeviceLabel() }),
+          });
+          const data = await res.json();
+          if (!data.ok) {
+            setResult(photo.id, "error", data.error ?? "Failed to queue");
+            return;
+          }
+          setResult(photo.id, "done", "Uploaded");
+        } catch (err) {
+          setResult(photo.id, "error", err instanceof Error ? err.message : String(err));
+        }
+      });
+    }
+
+    const queue = [...photos];
+    async function worker() {
+      while (queue.length > 0) {
+        const photo = queue.shift();
+        if (photo) await processOne(photo);
       }
     }
+
+    await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, photos.length) }, worker));
+    await appendChain;
 
     setUploading(false);
   }
