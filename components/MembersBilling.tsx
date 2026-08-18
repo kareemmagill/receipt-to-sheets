@@ -13,13 +13,15 @@ function formatMoney(n: number): string {
 
 const SUGGESTION_LIMIT = 8;
 
-// A member search box on the Scan a Slip page (Kareem, 2026-08-20: "start
-// with a search box"). Suggestions rank biggest spender first (already
-// sorted server-side by lib/membersBilling.ts's membersBySpend), so an
-// empty query just browses the top spenders and typing narrows that same
-// ranked list. Selecting one opens the same full billing picture (total
-// sales, total dues, every slip) shared with the Monthly Sales view's
-// "view all sales" link.
+// The Members Billing search box -- its own page (app/members-billing/
+// page.tsx), linked off a button on the Scan a Slip page (Kareem,
+// 2026-08-20: "move the members billing into its own page"). Suggestions
+// rank biggest spender first (already sorted server-side by
+// lib/membersBilling.ts's membersBySpend), so an empty query just browses
+// the top spenders and typing narrows that same ranked list. Selecting
+// one opens the same full billing picture (total sales, total dues,
+// every slip) shared with the Monthly Sales view's "view all sales" link.
+// No heading of its own -- the page it's embedded in supplies that.
 export function MembersBilling() {
   const [query, setQuery] = useState("");
   const [members, setMembers] = useState<MemberSpendEntry[] | null>(null);
@@ -55,7 +57,6 @@ export function MembersBilling() {
 
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <h2 style={{ fontSize: 16, margin: 0 }}>Members Billing</h2>
       <div style={{ position: "relative" }}>
         <input
           type="text"
