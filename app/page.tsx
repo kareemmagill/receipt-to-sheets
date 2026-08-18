@@ -391,9 +391,6 @@ export default function Home() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1 style={{ fontSize: 20 }}>PGYC Order Slip Scanner</h1>
         <div style={{ display: "flex", gap: 12, fontSize: 13 }}>
-          <Link href="/daily-report" style={{ color: "#555" }}>
-            Daily Report
-          </Link>
           <Link href="/development" style={{ color: "#555" }}>
             Development
           </Link>
@@ -498,23 +495,31 @@ export default function Home() {
           )}
 
           {error && <p style={{ color: "#b00020" }}>Error: {error}</p>}
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <Link
+              href="/daily-report"
+              style={{ ...secondaryButtonStyle, flex: 1, textAlign: "center", textDecoration: "none", display: "block" }}
+            >
+              Daily Report
+            </Link>
+            {/* Space reserved for a Monthly Sales report, not built yet
+                (Kareem, 2026-08-18). */}
+            <span style={{ ...secondaryButtonStyle, flex: 1, textAlign: "center", opacity: 0.4, cursor: "default" }}>
+              Monthly Sales
+            </span>
+          </div>
         </>
       )}
 
       {duplicateSlip && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <h2 style={screenTitleStyle}>Duplicate Slip</h2>
-          <div>
-            <p style={{ color: "#b00020", fontSize: 18, fontWeight: 700, margin: 0 }}>
-              Slip #{duplicateSlip.slipNumber} already entered!
-            </p>
-            {duplicateSlip.enteredAt && (
-              <p style={{ color: "#777", fontSize: 13, margin: 0 }}>
-                Entered on {formatEnteredAt(duplicateSlip.enteredAt)}
-                {duplicateSlip.enteredBy ? ` by ${duplicateSlip.enteredBy}` : ""}
-              </p>
-            )}
-          </div>
+          <p style={{ color: "#b00020", fontSize: 18, fontWeight: 700, margin: 0 }}>
+            #{duplicateSlip.slipNumber} already entered
+            {duplicateSlip.enteredBy ? ` by ${duplicateSlip.enteredBy}` : ""}
+            {duplicateSlip.enteredAt ? ` (${formatEnteredAt(duplicateSlip.enteredAt)})` : ""}
+          </p>
           <ExistingOrderRecap order={duplicateSlip} />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button onClick={handleProceedToUpdate} style={{ ...buttonStyle, flex: 1 }}>
@@ -652,16 +657,26 @@ function sumAmounts(items: EditableOrder["items"]): number {
 }
 
 // Stored as ISO/UTC (see buildSalesOrderRows) -- displayed in the viewer's
-// own local time, dd/mm/yyyy to match the rest of the app's date format.
+// own local time, collapsed to whichever of Just Now/Today/Yesterday/date
+// reads most naturally on the Duplicate Slip banner (Kareem, 2026-08-18:
+// "change text to #xxxxx already entered by Kareem (Just Now/Today/
+// Yesterday/Date)"). Falls through to dd/mm/yyyy for anything older.
 function formatEnteredAt(iso: string): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
+
+  const now = new Date();
+  if (now.getTime() - d.getTime() < 60_000) return "Just Now";
+
+  const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const dayDiff = Math.round((startOfDay(now) - startOfDay(d)) / 86_400_000);
+  if (dayDiff === 0) return "Today";
+  if (dayDiff === 1) return "Yesterday";
+
   const dd = String(d.getDate()).padStart(2, "0");
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const yyyy = d.getFullYear();
-  const hh = String(d.getHours()).padStart(2, "0");
-  const min = String(d.getMinutes()).padStart(2, "0");
-  return `${dd}/${mm}/${yyyy}, ${hh}:${min}`;
+  return `${dd}/${mm}/${yyyy}`;
 }
 
 function OrderSummary({ order }: { order: EditableOrder }) {
