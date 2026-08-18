@@ -499,7 +499,7 @@ export default function Home() {
 
           <Link
             href="/daily-report"
-            style={{ ...secondaryButtonStyle, textAlign: "center", textDecoration: "none", display: "block" }}
+            style={{ ...buttonStyle, textAlign: "center", textDecoration: "none", display: "block" }}
           >
             Sales Report
           </Link>
