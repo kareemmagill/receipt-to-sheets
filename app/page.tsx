@@ -497,19 +497,12 @@ export default function Home() {
 
           {error && <p style={{ color: "#b00020" }}>Error: {error}</p>}
 
-          <div style={{ display: "flex", gap: 8 }}>
-            <Link
-              href="/daily-report"
-              style={{ ...secondaryButtonStyle, flex: 1, textAlign: "center", textDecoration: "none", display: "block" }}
-            >
-              Daily Report
-            </Link>
-            {/* Space reserved for a Monthly Sales report, not built yet
-                (Kareem, 2026-08-18). */}
-            <span style={{ ...secondaryButtonStyle, flex: 1, textAlign: "center", opacity: 0.4, cursor: "default" }}>
-              Monthly Sales
-            </span>
-          </div>
+          <Link
+            href="/daily-report"
+            style={{ ...secondaryButtonStyle, textAlign: "center", textDecoration: "none", display: "block" }}
+          >
+            Sales Report
+          </Link>
         </>
       )}
 
