@@ -3,10 +3,11 @@
 import { useState } from "react";
 
 // A custom month-grid picker, not <input type="date"> -- native date
-// inputs give zero hooks to mark individual days, and Kareem wanted days
-// with recorded sales visually distinguished (bold) right in the picker
-// (2026-08-18). Value/onChange both use the same yyyy-mm-dd string the
-// rest of the app already works with.
+// inputs give zero hooks to mark individual days. Days with recorded
+// sales get a white-to-yellow heat map background, scaled per viewed
+// month against whichever day sold the most that month (full yellow) --
+// no sales stays white (Kareem, 2026-08-18). Value/onChange both use the
+// same yyyy-mm-dd string the rest of the app already works with.
 
 const WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 
@@ -24,15 +25,25 @@ function toDateKey(year: number, month: number, day: number): string {
   return `${year}-${pad2(month)}-${pad2(day)}`;
 }
 
+// White (0) -> yellow (1). Keeps red at 255 throughout and only fades
+// green/blue down, so black day-number text stays readable at every
+// intensity, not just the pale end.
+function heatMapColor(ratio: number): string {
+  const clamped = Math.max(0, Math.min(1, ratio));
+  const g = Math.round(255 - clamped * (255 - 214));
+  const b = Math.round(255 - clamped * 255);
+  return `rgb(255, ${g}, ${b})`;
+}
+
 export function DateCalendar({
   value,
   onChange,
-  markedDates,
+  salesByDate,
 }: {
   value: string; // yyyy-mm-dd
   onChange: (dateKey: string) => void;
-  // Dates (yyyy-mm-dd) to bold -- e.g. days with recorded sales.
-  markedDates: Set<string>;
+  // Total sales per date (yyyy-mm-dd) -- powers the heat map.
+  salesByDate: Record<string, number>;
 }) {
   const selected = parseDateKey(value);
   const initial = selected ?? { year: new Date().getFullYear(), month: new Date().getMonth() + 1, day: 1 };
@@ -73,6 +84,16 @@ export function DateCalendar({
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ];
 
+  // Scaled per viewed month, not globally -- "full yellow" means the
+  // busiest day of *this* month, so switching months doesn't wash out a
+  // slower month by comparing it against a much busier one elsewhere.
+  let monthMax = 0;
+  for (const day of cells) {
+    if (day === null) continue;
+    const total = salesByDate[toDateKey(viewYear, viewMonth, day)] ?? 0;
+    monthMax = Math.max(monthMax, total);
+  }
+
   const todayKey = toDateKey(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate());
 
   return (
@@ -98,7 +119,8 @@ export function DateCalendar({
           const dateKey = toDateKey(viewYear, viewMonth, day);
           const isSelected = dateKey === value;
           const isToday = dateKey === todayKey;
-          const hasSales = markedDates.has(dateKey);
+          const daySales = salesByDate[dateKey] ?? 0;
+          const heatColor = monthMax > 0 ? heatMapColor(daySales / monthMax) : "#fff";
           return (
             <button
               key={dateKey}
@@ -109,9 +131,9 @@ export function DateCalendar({
                 fontSize: 13,
                 borderRadius: 6,
                 border: isToday ? "1px solid #999" : "1px solid transparent",
-                background: isSelected ? "#171717" : "transparent",
+                background: isSelected ? "#171717" : heatColor,
                 color: isSelected ? "#fff" : "#111",
-                fontWeight: hasSales ? 700 : 400,
+                fontWeight: daySales > 0 ? 700 : 400,
                 cursor: "pointer",
               }}
             >

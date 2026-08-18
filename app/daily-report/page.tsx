@@ -97,7 +97,7 @@ export default function DailyReportPage() {
       <DateCalendar
         value={dateKey}
         onChange={handleDateChange}
-        markedDates={new Set(report?.datesWithSales ?? [])}
+        salesByDate={report?.salesByDate ?? {}}
       />
 
       {status === "loading" && <p>Loading…</p>}

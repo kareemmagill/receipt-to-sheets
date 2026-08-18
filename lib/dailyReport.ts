@@ -155,8 +155,11 @@ export interface DailyReport {
   photos: Record<string, PhotoLinkInfo>;
   // Every distinct date (across the whole sheet, not just this month) that
   // has at least one recorded sale -- lets the calendar bold those days
-  // without a separate round trip per month viewed (Kareem, 2026-08-18).
-  datesWithSales: string[];
+  // without a separate round trip per month viewed. Total sales per date
+  // (not just presence/absence), keyed yyyy-mm-dd -- powers the calendar's
+  // white-to-yellow heat map, scaled per month to whichever day sold the
+  // most (Kareem, 2026-08-18).
+  salesByDate: Record<string, number>;
 }
 
 export async function computeDailyReport(requestedDateKey?: string): Promise<DailyReport> {
@@ -182,12 +185,14 @@ export async function computeDailyReport(requestedDateKey?: string): Promise<Dai
     if (info) photos[s.slipNumber] = info;
   }
 
-  const datesWithSalesSet = new Set<string>();
+  const salesByDateMap = new Map<string, number>();
   for (const row of rows.slice(1)) {
     const key = dateKeyFromRow(row);
-    if (key) datesWithSalesSet.add(key);
+    if (!key) continue;
+    const amount = parseAmount(row[AMOUNT_COL] ?? "");
+    salesByDateMap.set(key, (salesByDateMap.get(key) ?? 0) + amount);
   }
-  const datesWithSales = [...datesWithSalesSet];
+  const salesByDate = Object.fromEntries(salesByDateMap);
 
-  return { dateKey, membersPaid, nonMembersPaid, membersNotPaid, nonMembersNotPaid, totalSales, photos, datesWithSales };
+  return { dateKey, membersPaid, nonMembersPaid, membersNotPaid, nonMembersNotPaid, totalSales, photos, salesByDate };
 }
