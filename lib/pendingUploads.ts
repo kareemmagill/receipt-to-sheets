@@ -1,5 +1,5 @@
 import { readTab, appendRows, ensureTabExists, deleteDataRowsAt } from "./googleSheets";
-import { driveThumbnailUrl } from "./googleDrive";
+import { driveThumbnailUrl, deleteFile } from "./googleDrive";
 
 // A queue of photos uploaded now for OCR + review later (Kareem,
 // 2026-08-20: "add a page for staff to upload a bunch of pictures for
@@ -75,8 +75,41 @@ export async function addPendingUpload(params: {
   ]);
 }
 
+// Best-effort -- a Drive delete failing (e.g. the file was already
+// removed some other way) shouldn't block clearing the queue row itself;
+// worst case is one orphaned file left in Drive, not a stuck queue entry.
+async function deleteDriveFileForPhotoLink(photoLink: string): Promise<void> {
+  const fileId = driveFileIdFromPhotoLink(photoLink);
+  if (!fileId) return;
+  try {
+    await deleteFile(fileId);
+  } catch {
+    // See comment above.
+  }
+}
+
 export async function removePendingUpload(rowNumber: number): Promise<void> {
+  const entry = await findPendingUpload(rowNumber);
   await deleteDataRowsAt(PENDING_UPLOADS_TAB, [rowNumber]);
+  if (entry) await deleteDriveFileForPhotoLink(entry.photoLink);
+}
+
+/**
+ * Clears every still-pending row in one batch (see deleteDataRowsAt --
+ * deletes highest-row-first within a single batchUpdate, so this is safe
+ * even though it's several rows at once) and their Drive files. Used by
+ * the Development page's "Delete All Pending Uploads" (Kareem,
+ * 2026-08-20: "view and delete/delete all these uploaded pictures").
+ */
+export async function removeAllPendingUploads(): Promise<number> {
+  const entries = await listPendingUploads();
+  if (entries.length === 0) return 0;
+  await deleteDataRowsAt(
+    PENDING_UPLOADS_TAB,
+    entries.map((e) => e.rowNumber)
+  );
+  await Promise.all(entries.map((e) => deleteDriveFileForPhotoLink(e.photoLink)));
+  return entries.length;
 }
 
 export function driveFileIdFromPhotoLink(photoLink: string): string | null {

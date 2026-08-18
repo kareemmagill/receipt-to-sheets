@@ -139,3 +139,16 @@ export async function downloadFileAsDataUrl(fileId: string): Promise<string> {
   const base64 = Buffer.from(media.data as ArrayBuffer).toString("base64");
   return `data:${mimeType};base64,${base64}`;
 }
+
+/**
+ * Permanently deletes a file from Drive -- used to clean up a Pending
+ * Uploads photo once its queue row is removed, whether that's because it
+ * was successfully processed (a separate archival copy is saved at that
+ * point, so the pending one is redundant) or deleted from the
+ * Development page (Kareem, 2026-08-20: "view and delete/delete all
+ * these uploaded pictures").
+ */
+export async function deleteFile(fileId: string): Promise<void> {
+  const drive = getDriveClient();
+  await drive.files.delete({ fileId });
+}

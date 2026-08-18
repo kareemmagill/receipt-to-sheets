@@ -21,6 +21,15 @@ interface Record {
   enteredAt: string;
 }
 
+interface PendingUpload {
+  rowNumber: number;
+  photoLink: string;
+  photoThumbnailUrl?: string;
+  uploadedAt: string;
+  uploadedBy: string;
+  device: string;
+}
+
 // Timestamp, not a relative label -- this table is a diagnostic list of
 // many records at once, where "Just Now" from an earlier scan would read
 // wrong by the time anyone looks at it (Kareem, 2026-08-20).
@@ -53,6 +62,10 @@ export default function DevelopmentPage() {
   const [busy, setBusy] = useState<"last" | "all" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  const [pendingUploads, setPendingUploads] = useState<PendingUpload[] | null>(null);
+  const [pendingBusy, setPendingBusy] = useState<"all" | number | null>(null);
+  const [pendingError, setPendingError] = useState<string | null>(null);
+
   // Used to re-fetch after a delete (not on mount -- see the effect below,
   // which duplicates these fetches inline rather than calling out to these
   // functions, since a lint rule can't verify a called-out function's
@@ -81,6 +94,19 @@ export default function DevelopmentPage() {
       .catch(() => {});
   }
 
+  function refreshPendingUploads() {
+    return fetch("/api/pending-uploads")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.ok) {
+          setPendingError(data.error ?? "Unknown error");
+          return;
+        }
+        setPendingUploads(data.uploads);
+      })
+      .catch((err) => setPendingError(err instanceof Error ? err.message : String(err)));
+  }
+
   useEffect(() => {
     fetch("/api/dev/status")
       .then((res) => res.json())
@@ -101,6 +127,17 @@ export default function DevelopmentPage() {
         setRecords(data.records);
       })
       .catch(() => {});
+
+    fetch("/api/pending-uploads")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.ok) {
+          setPendingError(data.error ?? "Unknown error");
+          return;
+        }
+        setPendingUploads(data.uploads);
+      })
+      .catch((err) => setPendingError(err instanceof Error ? err.message : String(err)));
   }, []);
 
   async function handleDeleteLast() {
@@ -156,6 +193,53 @@ export default function DevelopmentPage() {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(null);
+    }
+  }
+
+  async function handleDeletePendingUpload(upload: PendingUpload) {
+    if (!confirm(`Delete this pending upload (from ${upload.uploadedBy || "unknown"})? This can't be undone.`)) {
+      return;
+    }
+
+    setPendingBusy(upload.rowNumber);
+    setPendingError(null);
+    try {
+      const res = await fetch("/api/pending-uploads/remove", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rowNumber: upload.rowNumber }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        setPendingError(data.error ?? "Unknown error");
+        return;
+      }
+      refreshPendingUploads();
+    } catch (err) {
+      setPendingError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPendingBusy(null);
+    }
+  }
+
+  async function handleDeleteAllPendingUploads() {
+    if (!pendingUploads || pendingUploads.length === 0) return;
+    if (!confirm(`Delete ALL ${pendingUploads.length} pending upload(s)? This can't be undone.`)) return;
+
+    setPendingBusy("all");
+    setPendingError(null);
+    try {
+      const res = await fetch("/api/pending-uploads/delete-all", { method: "POST" });
+      const data = await res.json();
+      if (!data.ok) {
+        setPendingError(data.error ?? "Unknown error");
+        return;
+      }
+      refreshPendingUploads();
+    } catch (err) {
+      setPendingError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPendingBusy(null);
     }
   }
 
@@ -266,6 +350,61 @@ export default function DevelopmentPage() {
               )}
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h2 style={{ fontSize: 16, margin: 0 }}>
+            Pending Uploads{pendingUploads ? ` (${pendingUploads.length})` : ""}
+          </h2>
+          <button
+            onClick={handleDeleteAllPendingUploads}
+            disabled={!pendingUploads || pendingUploads.length === 0 || pendingBusy !== null}
+            style={dangerButtonStyle}
+          >
+            {pendingBusy === "all" ? "Deleting…" : "Delete All"}
+          </button>
+        </div>
+
+        {pendingError && <p style={{ color: "#b00020" }}>Error: {pendingError}</p>}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {(pendingUploads ?? []).map((u) => (
+            <div
+              key={u.rowNumber}
+              style={{ display: "flex", gap: 10, alignItems: "center", border: "1px solid #ddd", borderRadius: 8, padding: 8 }}
+            >
+              {u.photoThumbnailUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={u.photoThumbnailUrl}
+                  alt="Pending upload"
+                  style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6, flexShrink: 0 }}
+                />
+              ) : (
+                <div style={{ width: 56, height: 56, borderRadius: 6, background: "#eee", flexShrink: 0 }} />
+              )}
+              <div style={{ flex: 1, fontSize: 12, color: "#555" }}>
+                {u.uploadedBy && <div>By {u.uploadedBy}</div>}
+                <div>{u.uploadedAt ? formatDigitizedAt(u.uploadedAt) : ""}</div>
+                <a href={u.photoLink} target="_blank" rel="noopener noreferrer">
+                  View
+                </a>
+              </div>
+              <button
+                onClick={() => handleDeletePendingUpload(u)}
+                disabled={pendingBusy !== null}
+                style={{ ...dangerButtonStyle, padding: "8px 14px", fontSize: 13 }}
+              >
+                {pendingBusy === u.rowNumber ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          ))}
+          {pendingUploads && pendingUploads.length === 0 && (
+            <p style={{ fontSize: 13, color: "#777", margin: 0 }}>Nothing queued.</p>
+          )}
+          {!pendingUploads && <p style={{ fontSize: 13, color: "#777", margin: 0 }}>Loading…</p>}
         </div>
       </section>
     </main>
