@@ -354,12 +354,22 @@ export default function DailyReportPage() {
             gap: 10,
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", maxWidth: 600 }}>
-            <span style={{ color: "#fff", fontSize: 14 }}>Slip #{viewingSlip}</span>
-            <button type="button" onClick={() => setViewingSlip(null)} style={closeButtonStyle}>
-              Close
-            </button>
-          </div>
+          {slipDetailStatus === "loading" && (
+            <p style={{ color: "#ccc", fontSize: 13 }}>Loading digitised version…</p>
+          )}
+          {slipDetailStatus === "error" && (
+            <p style={{ color: "#f5a3a3", fontSize: 13 }}>Couldn&apos;t load the digitised version.</p>
+          )}
+          {slipDetailStatus === "ready" && slipDetail && (
+            <div style={{ width: "100%", maxWidth: 600 }}>
+              <ExistingOrderRecap order={slipDetail} />
+            </div>
+          )}
+          {slipDetailStatus === "ready" && !slipDetail && !report?.photos[viewingSlip]?.photoThumbnailUrl && (
+            <div style={{ background: "#fff", borderRadius: 8, padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+              <p style={{ margin: 0, fontSize: 13 }}>No record found for this slip.</p>
+            </div>
+          )}
 
           {(() => {
             const photo = slipDetail ?? report?.photos[viewingSlip];
@@ -369,32 +379,11 @@ export default function DailyReportPage() {
               <img
                 src={photo.photoThumbnailUrl}
                 alt={`Slip #${viewingSlip}`}
-                onClick={(e) => e.stopPropagation()}
                 onError={() => setFailedPhotoSlip(viewingSlip)}
                 style={{ maxWidth: "100%", maxHeight: "60vh", borderRadius: 8 }}
               />
             );
           })()}
-
-          {slipDetailStatus === "loading" && (
-            <p style={{ color: "#ccc", fontSize: 13 }}>Loading digitised version…</p>
-          )}
-          {slipDetailStatus === "error" && (
-            <p style={{ color: "#f5a3a3", fontSize: 13 }}>Couldn&apos;t load the digitised version.</p>
-          )}
-          {slipDetailStatus === "ready" && slipDetail && (
-            <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 600 }}>
-              <ExistingOrderRecap order={slipDetail} />
-            </div>
-          )}
-          {slipDetailStatus === "ready" && !slipDetail && !report?.photos[viewingSlip]?.photoThumbnailUrl && (
-            <div
-              onClick={(e) => e.stopPropagation()}
-              style={{ background: "#fff", borderRadius: 8, padding: 16, display: "flex", flexDirection: "column", gap: 8 }}
-            >
-              <p style={{ margin: 0, fontSize: 13 }}>No record found for this slip.</p>
-            </div>
-          )}
         </div>
       )}
     </main>
@@ -656,16 +645,6 @@ const slipLinkStyle: React.CSSProperties = {
   textDecoration: "underline",
   cursor: "pointer",
   font: "inherit",
-};
-
-const closeButtonStyle: React.CSSProperties = {
-  padding: "6px 12px",
-  fontSize: 13,
-  borderRadius: 6,
-  border: "1px solid #fff",
-  background: "none",
-  color: "#fff",
-  cursor: "pointer",
 };
 
 const tableStyle: React.CSSProperties = {
