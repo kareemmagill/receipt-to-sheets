@@ -459,7 +459,7 @@ export default function Home() {
 
       {!extraction && (
         <>
-          <h2 style={screenTitleStyle}>Scan a Slip</h2>
+          <h2 style={screenTitleStyle}>Home Page</h2>
           <input
             ref={inputRef}
             type="file"
