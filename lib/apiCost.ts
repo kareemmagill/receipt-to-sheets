@@ -89,6 +89,19 @@ export const HOSTING_COST_PHP_PER_MONTH = 0;
 // if the expected volume assumption changes.
 export const PROJECTED_MONTHLY_SLIPS = 500;
 
+// Vercel Pro plan -- $20/month base, verified against vercel.com/pricing
+// (2026-08-19: 1M function invocations + 1TB bandwidth included, both far
+// beyond what ~1000 slips/month actually generates -- see the costs page
+// for the math). Vercel's own Hobby-plan FAQ explicitly restricts it to
+// "personal, non-commercial use" -- PGYC is a business, so staying on
+// Hobby is against Vercel's terms regardless of whether usage happens to
+// fit the free tier's resource limits. In USD (a real known list price,
+// unlike the hand-entered PHP figures above) -- converted for display via
+// USD_TO_PHP_RATE. Shown on the costs page as a recommendation only --
+// nothing has actually been upgraded (Kareem, 2026-08-19: "can you add
+// that to the costs page, making it clear, this is an option only").
+export const VERCEL_PRO_COST_USD_PER_MONTH = 20;
+
 // What Kareem has personally paid for Claude Code usage building this app
 // -- a one-time development cost, separate from (and not part of) the
 // app's own ongoing runtime API/hosting spend above, so it's shown on its

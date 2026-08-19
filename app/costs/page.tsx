@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { ApiUsageSummary } from "@/lib/apiUsageLog";
-import { USD_TO_PHP_RATE, HOSTING_COST_PHP_PER_MONTH, PROJECTED_MONTHLY_SLIPS, DEVELOPMENT_COST_PHP } from "@/lib/apiCost";
+import {
+  USD_TO_PHP_RATE,
+  HOSTING_COST_PHP_PER_MONTH,
+  PROJECTED_MONTHLY_SLIPS,
+  DEVELOPMENT_COST_PHP,
+  VERCEL_PRO_COST_USD_PER_MONTH,
+} from "@/lib/apiCost";
 import { usePageTitle } from "@/lib/usePageTitle";
 
 function formatMoney(n: number): string {
@@ -113,6 +119,39 @@ export default function CostsPage() {
               <span style={{ fontWeight: 600 }}>₱{formatMoney(HOSTING_COST_PHP_PER_MONTH)}/month</span>
             </div>
             <p style={{ fontSize: 12, color: "#999", margin: 0 }}>Free at this app&apos;s current volume.</p>
+          </section>
+
+          <section
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              background: "#e8f0fe",
+              border: "1px solid #1a73e8",
+              borderRadius: 8,
+              padding: "14px 16px",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h2 style={{ fontSize: 16, margin: 0 }}>Vercel Plan</h2>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#174ea6", textTransform: "uppercase" }}>Option only</span>
+            </div>
+            <p style={{ fontSize: 13, color: "#174ea6", margin: 0 }}>
+              Currently on Vercel&apos;s free Hobby plan -- but Vercel&apos;s own terms restrict Hobby to{" "}
+              <strong>personal, non-commercial use</strong>, and PGYC is a business. Worth moving to <strong>Pro</strong> for
+              that reason alone, regardless of whether usage fits inside Hobby&apos;s free limits.
+            </p>
+            <div style={rowStyle}>
+              <span style={{ fontSize: 13, color: "#174ea6" }}>Vercel Pro</span>
+              <span style={{ fontWeight: 600, color: "#174ea6" }}>
+                ₱{formatMoney(VERCEL_PRO_COST_USD_PER_MONTH * USD_TO_PHP_RATE)}/month (${VERCEL_PRO_COST_USD_PER_MONTH}/month)
+              </span>
+            </div>
+            <p style={{ fontSize: 12, color: "#174ea6", margin: 0 }}>
+              At ~1,000 slips/month, actual usage (function calls, data transfer) stays well under 2% of what Pro includes
+              (1M calls, 1TB/month) -- so the real bill should sit right at that flat ${VERCEL_PRO_COST_USD_PER_MONTH}/month,
+              with no meaningful overage expected. Nothing has been changed -- this is a recommendation only.
+            </p>
           </section>
 
           <section style={{ display: "flex", flexDirection: "column", gap: 4 }}>
