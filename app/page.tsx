@@ -34,6 +34,13 @@ export default function Home() {
   const inputRef = useRef<HTMLInputElement>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
+  // Set when the current photo came from the sample-slip gallery, not a
+  // real camera/library pick or the pending-upload handoff -- hides the
+  // Retake/Use Photo row in that case (Kareem, 2026-08-20: "when a user
+  // selects one of the sample slips, remove the 2 buttons ontop") since
+  // there's no real photo to retake; "Return to Home Page" still covers
+  // backing out.
+  const [isSamplePhoto, setIsSamplePhoto] = useState(false);
   const [lastImageDataUrl, setLastImageDataUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -178,6 +185,7 @@ export default function Home() {
     setSaveError(null);
     setExistingOrder(null);
     setDuplicateSlip(null);
+    setIsSamplePhoto(false);
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -198,6 +206,7 @@ export default function Home() {
     setSaveError(null);
     setExistingOrder(null);
     setDuplicateSlip(null);
+    setIsSamplePhoto(false);
     setImageDataUrl(lastImageDataUrl);
   }
 
@@ -212,6 +221,7 @@ export default function Home() {
     setSaveError(null);
     setExistingOrder(null);
     setDuplicateSlip(null);
+    setIsSamplePhoto(true);
 
     try {
       const res = await fetch(file);
@@ -301,6 +311,7 @@ export default function Home() {
     setDeleteStatus("idle");
     setDeleteError(null);
     setImageDataUrl(null);
+    setIsSamplePhoto(false);
     setPendingQueueRowNumber(null);
   }
 
@@ -479,22 +490,24 @@ export default function Home() {
             style={{ display: "none" }}
           />
 
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button onClick={() => inputRef.current?.click()} style={{ ...buttonStyle, flex: 1 }}>
-              {imageDataUrl ? "Retake Photo" : "Take Photo"}
-            </button>
-            <button
-              onClick={() => libraryInputRef.current?.click()}
-              style={{ ...buttonStyle, flex: 1, background: "#fff", color: "#171717" }}
-            >
-              Use Photo
-            </button>
-            {!imageDataUrl && lastImageDataUrl && (
-              <button onClick={handleUseLastPhoto} style={{ ...buttonStyle, flex: 1, background: "#fff", color: "#171717" }}>
-                Use Last Photo
+          {!(imageDataUrl && isSamplePhoto) && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button onClick={() => inputRef.current?.click()} style={{ ...buttonStyle, flex: 1 }}>
+                {imageDataUrl ? "Retake Photo" : "Take Photo"}
               </button>
-            )}
-          </div>
+              <button
+                onClick={() => libraryInputRef.current?.click()}
+                style={{ ...buttonStyle, flex: 1, background: "#fff", color: "#171717" }}
+              >
+                Use Photo
+              </button>
+              {!imageDataUrl && lastImageDataUrl && (
+                <button onClick={handleUseLastPhoto} style={{ ...buttonStyle, flex: 1, background: "#fff", color: "#171717" }}>
+                  Use Last Photo
+                </button>
+              )}
+            </div>
+          )}
 
           {!imageDataUrl && SAMPLE_SLIPS.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%", minWidth: 0 }}>
@@ -543,33 +556,37 @@ export default function Home() {
 
           {error && <p style={{ color: "#b00020" }}>Error: {error}</p>}
 
-          <Link
-            href="/daily-report"
-            style={{ ...buttonStyle, textAlign: "center", textDecoration: "none", display: "block" }}
-          >
-            Sales Report
-          </Link>
+          {!imageDataUrl && (
+            <>
+              <Link
+                href="/daily-report"
+                style={{ ...buttonStyle, textAlign: "center", textDecoration: "none", display: "block" }}
+              >
+                Sales Report
+              </Link>
 
-          <Link
-            href="/members-billing"
-            style={{ ...buttonStyle, textAlign: "center", textDecoration: "none", display: "block" }}
-          >
-            Members Billing
-          </Link>
+              <Link
+                href="/members-billing"
+                style={{ ...buttonStyle, textAlign: "center", textDecoration: "none", display: "block" }}
+              >
+                Members Billing
+              </Link>
 
-          <Link
-            href="/upload-slips"
-            style={{ ...buttonStyle, textAlign: "center", textDecoration: "none", display: "block" }}
-          >
-            Upload Slips
-          </Link>
+              <Link
+                href="/upload-slips"
+                style={{ ...buttonStyle, textAlign: "center", textDecoration: "none", display: "block" }}
+              >
+                Upload Slips
+              </Link>
 
-          <Link
-            href="/process-queue"
-            style={{ ...buttonStyle, textAlign: "center", textDecoration: "none", display: "block" }}
-          >
-            Process Queue{pendingQueueCount ? ` (${pendingQueueCount})` : ""}
-          </Link>
+              <Link
+                href="/process-queue"
+                style={{ ...buttonStyle, textAlign: "center", textDecoration: "none", display: "block" }}
+              >
+                Process Queue{pendingQueueCount ? ` (${pendingQueueCount})` : ""}
+              </Link>
+            </>
+          )}
         </>
       )}
 
