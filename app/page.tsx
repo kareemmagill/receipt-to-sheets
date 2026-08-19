@@ -17,14 +17,8 @@ import { SlipLayout } from "@/components/SlipLayout";
 import { ExistingOrderRecap } from "@/components/ExistingOrderRecap";
 import { formatEnteredAt } from "@/lib/formatEnteredAt";
 import type { ApiUsageSummary } from "@/lib/apiUsageLog";
-import { AiCostSummary } from "@/components/AiCostSummary";
+import { USD_TO_PHP_RATE } from "@/lib/apiCost";
 import { takePendingUploadHandoff } from "@/lib/pendingUploadHandoff";
-
-// Approximate, hand-set -- there's no live exchange-rate feed wired up.
-// Anthropic bills in USD; this is purely a display conversion for
-// Kareem's own reference (2026-08-18). Update this if it drifts far from
-// the real rate.
-const USD_TO_PHP_RATE = 58;
 
 // Cap for the copy archived to Google Drive on save -- lowered from 2200
 // to 800 (Kareem, 2026-08-17) to keep uploads faster and Drive usage
@@ -87,10 +81,10 @@ export default function Home() {
   const [userName, setUserName] = useState("");
   // Running estimate of what this app's Claude API calls have cost so far
   // (Kareem, 2026-08-17) -- null while loading/unavailable, in which case
-  // nothing renders rather than showing a misleading ₱0.00. See
-  // components/AiCostSummary.tsx for how the headline (scan-only) vs.
-  // expanded per-model breakdown (everything, including Ask the Sales
-  // Data) are split.
+  // nothing renders rather than showing a misleading ₱0.00. Full breakdown
+  // (per-model, hosting, projected monthly) lives on its own page
+  // (app/costs/page.tsx, Kareem 2026-08-19) -- this is just the headline
+  // link.
   const [usage, setUsage] = useState<ApiUsageSummary | null>(null);
   // Set when this photo came from the Process Queue page rather than a
   // live capture (see lib/pendingUploadHandoff.ts) -- its Pending Uploads
@@ -450,7 +444,18 @@ export default function Home() {
         </div>
       </div>
 
-      {usage !== null && <AiCostSummary usage={usage} phpRate={USD_TO_PHP_RATE} />}
+      {usage !== null && (
+        <Link href="/costs" style={{ fontSize: 15, color: "#999", textDecoration: "none" }}>
+          {usage.scanCount > 0 ? (
+            <>
+              AI Cost: ₱{(usage.scanCostUsd * USD_TO_PHP_RATE).toFixed(2)} for {usage.scanCount} slip
+              {usage.scanCount === 1 ? "" : "s"}, ₱{((usage.scanCostUsd / usage.scanCount) * USD_TO_PHP_RATE).toFixed(2)}/scan →
+            </>
+          ) : (
+            "AI Cost →"
+          )}
+        </Link>
+      )}
 
       {!extraction && (
         <>

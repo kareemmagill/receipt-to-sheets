@@ -64,3 +64,38 @@ export function costForUsage(model: string, usage: ApiUsage): number | null {
     (usage.cacheReadInputTokens / 1_000_000) * pricing.cacheReadPerMillion
   );
 }
+
+// Hand-set average, deliberately not a live exchange-rate feed -- Kareem,
+// 2026-08-19: "im ok to average the USD1 = PHP60 so no need for realtime".
+// Anthropic bills in USD; this is purely a display conversion for
+// Kareem's own reference. Update this if it drifts far from the real
+// rate (was 58 as of 2026-08-18).
+export const USD_TO_PHP_RATE = 60;
+
+// Vercel Hobby plan + Google Sheets/Drive APIs, both free at this app's
+// current volume -- ₱0 for now (Kareem, 2026-08-19). In PHP directly, not
+// USD-converted -- Kareem: "all in PHP" -- so a real figure later can be
+// entered as whatever he's actually billed, with no round-trip fx
+// assumption. Update the day any of that changes (e.g. upgrading off
+// Vercel's free tier). Only read by app/costs/page.tsx.
+export const HOSTING_COST_PHP_PER_MONTH = 0;
+
+// What "projected monthly cost" on the costs page assumes: 500 order
+// slips/month, extrapolated from whichever AI model(s) are actually
+// logged right now (real measured per-scan average, not a hypothetical
+// list-price calculation). Kareem, 2026-08-19: "projected monthly costs
+// based on 500 chits, while using the existing AI models... i will be
+// adapting and investigating the accuracy of them later" -- update this
+// if the expected volume assumption changes.
+export const PROJECTED_MONTHLY_SLIPS = 500;
+
+// What Kareem has personally paid for Claude Code usage building this app
+// -- a one-time development cost, separate from (and not part of) the
+// app's own ongoing runtime API/hosting spend above, so it's shown on its
+// own and deliberately excluded from the projected-monthly-cost math
+// (Kareem, 2026-08-19: "add an AI development cost, i.e. what i have paid
+// for use of claude to this list"). In PHP directly, same "all in PHP"
+// reasoning as HOSTING_COST_PHP_PER_MONTH above. No API this app has
+// access to can know this -- null until Kareem provides a real figure;
+// update by hand.
+export const DEVELOPMENT_COST_PHP: number | null = null;
