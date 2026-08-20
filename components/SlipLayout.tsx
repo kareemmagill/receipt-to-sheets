@@ -65,6 +65,17 @@ export function SlipLayout({ slipNumber, slipType, customer, waitress, date, mem
           <div style={{ fontSize: 12 }}>
             <CheckboxLabel checked={memberStatus === "Non-Member"} label="Non-Member" />
           </div>
+          {memberStatus && memberStatus !== "Member" && memberStatus !== "Non-Member" && (
+            // One of the Other sub-options (Staff/Classic C/Wine C/
+            // Reciprocal, or any future addition) -- neither checkbox
+            // above applies to it, so it's written out plainly instead
+            // (Kareem, 2026-08-20: "write that option down above the
+            // date / below non-member"). Not a fixed list here -- any
+            // status that isn't literally Member/Non-Member is treated
+            // this way, so this stays correct if VerificationForm's
+            // Other options ever change without a second edit here.
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#111", marginTop: 2 }}>{memberStatus}</div>
+          )}
         </div>
       </div>
 
