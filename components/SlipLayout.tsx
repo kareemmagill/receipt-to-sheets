@@ -40,7 +40,15 @@ export function SlipLayout({ slipNumber, slipType, customer, waitress, date, mem
   const paymentLabel = terms === "CREDIT" ? "Not Paid" : terms === "COD" ? "Paid" : undefined;
 
   return (
-    <div style={{ border: "1px solid #ccc", borderRadius: 8, padding: 14, background: "#fdfdfb" }}>
+    // color explicit on this container (not just background) -- most of
+    // this card's own text never set its own color, so it was inheriting
+    // the app shell's light/white text color (set for the page's dark
+    // background) straight through onto this deliberately light card,
+    // washing out everything except the handful of fields that happened
+    // to already set an explicit color (found via screenshot, Kareem,
+    // 2026-08-20: "whats wrong with the colors"). Setting it once here
+    // gives every descendant a correct color to inherit instead.
+    <div style={{ border: "1px solid #ccc", borderRadius: 8, padding: 14, background: "#fdfdfb", color: "#111" }}>
       <div style={{ textAlign: "center", fontWeight: 700, fontSize: 13, letterSpacing: "0.02em" }}>
         PUERTO GALERA YACHT CLUB, INC.
       </div>

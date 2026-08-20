@@ -74,8 +74,6 @@ export default function Home() {
   // is always unique (Kareem, 2026-08-16) and, unlike AR number, present
   // even on legacy rows that predate this app.
   const [editingSlipNumber, setEditingSlipNumber] = useState<string | null>(null);
-  const [deleteStatus, setDeleteStatus] = useState<"idle" | "deleting" | "deleted" | "error">("idle");
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   // Set if the inline thumbnail fails to load -- e.g. a photo archived
   // before the Drive link-sharing fix (Kareem, 2026-08-17), which isn't
   // link-shareable yet. Falls back to the plain "View" link instead of a
@@ -316,8 +314,6 @@ export default function Home() {
     setSavedOrder(null);
     setPhotoWarning(null);
     setEditingSlipNumber(null);
-    setDeleteStatus("idle");
-    setDeleteError(null);
     setImageDataUrl(null);
     setIsSamplePhoto(false);
     setPendingQueueRowNumber(null);
@@ -333,31 +329,6 @@ export default function Home() {
   function handleCancelEdit() {
     setEditingSlipNumber(null);
     setSaveStatus("success");
-  }
-
-  async function handleDeleteSaved() {
-    if (!savedOrder?.order_slip_number) return;
-    if (!confirm("Delete this saved order? This can't be undone.")) return;
-
-    setDeleteStatus("deleting");
-    setDeleteError(null);
-    try {
-      const res = await fetch("/api/delete-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slipNumber: savedOrder.order_slip_number }),
-      });
-      const data = await res.json();
-      if (!data.ok) {
-        setDeleteError(data.error ?? "Unknown error");
-        setDeleteStatus("error");
-        return;
-      }
-      setDeleteStatus("deleted");
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : String(err));
-      setDeleteStatus("error");
-    }
   }
 
   // replaceSlipNumberOverride is used by "Update Record" (see
@@ -407,30 +378,41 @@ export default function Home() {
       setPhotoWarning(data.photoWarning ?? data.replaceWarning ?? null);
       setEditingSlipNumber(null);
       setExistingOrder(null);
-      setDeleteStatus("idle");
       setSaveStatus("success");
 
       // Only now that the slip actually saved -- clears this photo out of
-      // the Process Queue. Fire-and-forget: a failure here just leaves a
-      // now-redundant row in the queue for someone to notice and clear
-      // manually, not something worth blocking the confirmation screen on.
-      // Stays on the confirmation screen rather than auto-loading the next
-      // queue slip (Kareem, 2026-08-20: "dont automatically move from the
-      // confirmation page... hold on the confirmation page until the user
-      // clicks on 'enter another slip' button") -- justSavedFromQueue
-      // tracks that this save came from the queue (independent of
-      // pendingQueueRowNumber, which is about the *currently loaded*
-      // photo and gets cleared right below) so the confirmation screen
-      // knows whether to offer that button at all.
+      // the Process Queue. Stays on the confirmation screen rather than
+      // auto-loading the next queue slip (Kareem, 2026-08-20: "dont
+      // automatically move from the confirmation page... hold on the
+      // confirmation page until the user clicks on 'enter another slip'
+      // button") -- justSavedFromQueue tracks that this save came from
+      // the queue (independent of pendingQueueRowNumber, which is about
+      // the *currently loaded* photo and gets cleared right below) so the
+      // confirmation screen knows whether to offer that button at all.
+      // Removal is awaited (not fire-and-forget) specifically so the
+      // remaining-count fetch right after it reflects this row actually
+      // being gone, for the "Next Slip (N left)" button's count.
       if (pendingQueueRowNumber !== null) {
         const rowToRemove = pendingQueueRowNumber;
         setPendingQueueRowNumber(null);
         setJustSavedFromQueue(true);
-        fetch("/api/pending-uploads/remove", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rowNumber: rowToRemove }),
-        }).catch(() => {});
+        try {
+          await fetch("/api/pending-uploads/remove", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ rowNumber: rowToRemove }),
+          });
+        } catch {
+          // Best-effort -- even if removal failed, still refresh the
+          // count below; worst case it's off by one until a reload.
+        }
+        try {
+          const listRes = await fetch("/api/pending-uploads");
+          const listData = await listRes.json();
+          if (listData.ok) setPendingQueueCount(listData.uploads.length);
+        } catch {
+          // Best-effort -- see comment above.
+        }
       }
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err));
@@ -444,7 +426,7 @@ export default function Home() {
   // still tapping "Process Order Slip" per slip (never auto-extracts) --
   // OCR is a real API cost, and every slip still needs a deliberate human
   // look before it's even read. Only ever called from the confirmation
-  // screen's "Enter Another Slip" button, never automatically.
+  // screen's "Next Slip" button, never automatically.
   async function handleProcessNextInQueue() {
     try {
       const listRes = await fetch("/api/pending-uploads");
@@ -470,8 +452,6 @@ export default function Home() {
       setSavedOrder(null);
       setPhotoWarning(null);
       setEditingSlipNumber(null);
-      setDeleteStatus("idle");
-      setDeleteError(null);
       setIsSamplePhoto(false);
       setJustSavedFromQueue(false);
       setImageDataUrl(photoData.imageDataUrl);
@@ -744,53 +724,33 @@ export default function Home() {
 
           {photoWarning && <p style={{ color: "#8a6d00", fontSize: 12 }}>{photoWarning}</p>}
 
-          {deleteStatus === "deleted" ? (
-            <>
-              <p style={{ color: "#555" }}>Deleted.</p>
-              <button onClick={handleRetake} style={buttonStyle}>
+          <OrderSummary order={savedOrder} />
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button onClick={handleEditSaved} style={secondaryButtonStyle}>
+              Edit
+            </button>
+            {justSavedFromQueue ? (
+              <button onClick={handleProcessNextInQueue} style={{ ...buttonStyle, flex: 1 }}>
+                Next Slip ({pendingQueueCount} left)
+              </button>
+            ) : (
+              <button onClick={handleRetake} style={{ ...buttonStyle, flex: 1 }}>
                 Scan Another Slip
               </button>
-            </>
-          ) : (
-            <>
-              <OrderSummary order={savedOrder} />
+            )}
+          </div>
 
-              {deleteError && <p style={{ color: "#b00020", fontSize: 13 }}>Delete failed: {deleteError}</p>}
-
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button onClick={handleEditSaved} style={secondaryButtonStyle}>
-                  Edit
-                </button>
-                <button
-                  onClick={handleDeleteSaved}
-                  disabled={deleteStatus === "deleting"}
-                  style={dangerButtonStyle}
-                >
-                  {deleteStatus === "deleting" ? "Deleting…" : "Delete"}
-                </button>
-                {justSavedFromQueue ? (
-                  <button onClick={handleProcessNextInQueue} style={{ ...buttonStyle, flex: 1 }}>
-                    Enter Another Slip
-                  </button>
-                ) : (
-                  <button onClick={handleRetake} style={{ ...buttonStyle, flex: 1 }}>
-                    Scan Another Slip
-                  </button>
-                )}
-              </div>
-
-              {imageDataUrl && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <span style={{ fontSize: 12, color: "#777" }}>Saved slip photo</span>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={imageDataUrl}
-                    alt="Saved order slip"
-                    style={{ maxWidth: "100%", height: "auto", display: "block", borderRadius: 8, border: "1px solid #ccc" }}
-                  />
-                </div>
-              )}
-            </>
+          {imageDataUrl && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={{ fontSize: 12, color: "#777" }}>Saved slip photo</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={imageDataUrl}
+                alt="Saved order slip"
+                style={{ maxWidth: "100%", height: "auto", display: "block", borderRadius: 8, border: "1px solid #ccc" }}
+              />
+            </div>
           )}
         </div>
       )}
@@ -856,15 +816,5 @@ const secondaryButtonStyle: React.CSSProperties = {
   border: "1px solid #999",
   background: "#fff",
   color: "#333",
-  cursor: "pointer",
-};
-
-const dangerButtonStyle: React.CSSProperties = {
-  padding: "14px 20px",
-  fontSize: 16,
-  borderRadius: 8,
-  border: "1px solid #b00020",
-  background: "#fff",
-  color: "#b00020",
   cursor: "pointer",
 };
