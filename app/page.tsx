@@ -402,20 +402,74 @@ export default function Home() {
       setSaveStatus("success");
 
       // Only now that the slip actually saved -- clears this photo out of
-      // the Process Queue. Fire-and-forget: a failure here just leaves a
-      // now-redundant row in the queue for someone to notice and clear
-      // manually, not something worth blocking the save success screen on.
+      // the Process Queue, then immediately loads whichever slip is next
+      // in the queue so working through a big batch doesn't mean a manual
+      // trip back to /process-queue per slip (Kareem, 2026-08-20: "when
+      // one is done, go directly to the next"). Removal is awaited (not
+      // fire-and-forget like before) specifically so the next-item lookup
+      // right after it can't race the deletion and pick this same row
+      // again.
       if (pendingQueueRowNumber !== null) {
-        fetch("/api/pending-uploads/remove", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rowNumber: pendingQueueRowNumber }),
-        }).catch(() => {});
+        const rowToRemove = pendingQueueRowNumber;
         setPendingQueueRowNumber(null);
+        try {
+          await fetch("/api/pending-uploads/remove", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ rowNumber: rowToRemove }),
+          });
+        } catch {
+          // Best-effort -- even if removal failed, still try to advance;
+          // worst case the queue shows one redundant row to clear by hand.
+        }
+        await handleProcessNextInQueue();
       }
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err));
       setSaveStatus("error");
+    }
+  }
+
+  // Loads whichever slip is now oldest in the Process Queue, resetting the
+  // whole review flow the same way handleRetake does -- lands the reviewer
+  // straight back on the loaded-photo screen for the next slip instead of
+  // the confirmation screen. Requires still tapping "Process Order Slip"
+  // per slip (never auto-extracts) -- OCR is a real API cost, and every
+  // slip still needs a deliberate human look before it's read at all.
+  // Best-effort/silent on failure: if the queue's genuinely empty or this
+  // fetch fails, the reviewer is just left on the normal confirmation
+  // screen, same as before this existed.
+  async function handleProcessNextInQueue() {
+    try {
+      const listRes = await fetch("/api/pending-uploads");
+      const listData = await listRes.json();
+      if (!listData.ok || !listData.uploads || listData.uploads.length === 0) {
+        setPendingQueueCount(0);
+        return;
+      }
+      setPendingQueueCount(listData.uploads.length);
+
+      const next = listData.uploads[0];
+      const photoRes = await fetch(`/api/pending-uploads/photo?rowNumber=${next.rowNumber}`);
+      const photoData = await photoRes.json();
+      if (!photoData.ok) return;
+
+      setExtraction(null);
+      setSaveStatus("idle");
+      setSaveError(null);
+      setPendingOrder(null);
+      setExistingOrder(null);
+      setDuplicateSlip(null);
+      setSavedOrder(null);
+      setPhotoWarning(null);
+      setEditingSlipNumber(null);
+      setDeleteStatus("idle");
+      setDeleteError(null);
+      setIsSamplePhoto(false);
+      setImageDataUrl(photoData.imageDataUrl);
+      setPendingQueueRowNumber(next.rowNumber);
+    } catch {
+      // Best-effort -- see comment above.
     }
   }
 
