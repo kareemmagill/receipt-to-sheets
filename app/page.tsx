@@ -108,6 +108,12 @@ export default function Home() {
   // How many photos are sitting in the Process Queue -- shown as a badge
   // on that button so staff can see there's backlog without opening it.
   const [pendingQueueCount, setPendingQueueCount] = useState(0);
+  // "Next Slip" does two real awaited round trips (list fetch, then a
+  // Drive photo fetch) before the next photo appears -- Kareem, 2026-08-20:
+  // "seems slow to work, perhaps its because loading. can you add a
+  // waiting icon". Same Spinner + disabled-button pattern already used for
+  // handleProcess above.
+  const [loadingNextSlip, setLoadingNextSlip] = useState(false);
 
   useEffect(() => {
     fetch("/api/usage-total")
@@ -428,6 +434,7 @@ export default function Home() {
   // look before it's even read. Only ever called from the confirmation
   // screen's "Next Slip" button, never automatically.
   async function handleProcessNextInQueue() {
+    setLoadingNextSlip(true);
     try {
       const listRes = await fetch("/api/pending-uploads");
       const listData = await listRes.json();
@@ -458,6 +465,8 @@ export default function Home() {
       setPendingQueueRowNumber(next.rowNumber);
     } catch {
       // Best-effort -- see comment above.
+    } finally {
+      setLoadingNextSlip(false);
     }
   }
 
@@ -731,8 +740,9 @@ export default function Home() {
               Edit
             </button>
             {justSavedFromQueue ? (
-              <button onClick={handleProcessNextInQueue} style={{ ...buttonStyle, flex: 1 }}>
-                Next Slip ({pendingQueueCount} left)
+              <button onClick={handleProcessNextInQueue} disabled={loadingNextSlip} style={{ ...buttonStyle, flex: 1 }}>
+                {loadingNextSlip && <Spinner />}
+                {loadingNextSlip ? "Loading…" : `Next Slip (${pendingQueueCount} left)`}
               </button>
             ) : (
               <button onClick={handleRetake} style={{ ...buttonStyle, flex: 1 }}>
