@@ -21,6 +21,19 @@ const MEMBER_TOGGLE_OPTIONS = [
   { value: "Member", display: "Member" },
   { value: "Non-Member", display: "Non-Member" },
 ];
+// Sub-categories revealed under an "Other" button (Kareem, 2026-08-20).
+// Deliberately not "Non-Member" for enforcePaymentRule/the free-text
+// customer field/disabledOptionValues purposes below -- all three of
+// those only special-case the literal string "Non-Member", so these fall
+// through to the same behavior as Member (roster-select customer field,
+// credit terms allowed) with no extra code needed -- confirmed with
+// Kareem: unlike an anonymous walk-in, these are named/established
+// account categories, so there's no reason to force them Paid-only.
+const OTHER_MEMBER_STATUS_OPTIONS = [
+  { value: "Staff", display: "Staff" },
+  { value: "Classic C", display: "Classic C" },
+  { value: "Wine C", display: "Wine C" },
+];
 const PAID_TOGGLE_OPTIONS = [
   { value: "COD", display: "Paid" },
   { value: "CREDIT", display: "Not Paid" },
@@ -542,14 +555,14 @@ export default function VerificationForm({
           {customerError && <span style={{ fontSize: 12, color: "#b00020" }}>{customerError}</span>}
         </div>
 
-        <ToggleField
-          label="Member Status"
+        <MemberStatusField
           value={order.member_status}
-          options={MEMBER_TOGGLE_OPTIONS}
           onChange={(v) => {
             updateField("member_status", v);
             // A walk-in must always pay on the spot -- never allowed to be
-            // marked Not Paid (Kareem, 2026-08-17).
+            // marked Not Paid (Kareem, 2026-08-17). Only literal
+            // "Non-Member" triggers this -- Staff/Classic C/Wine C are
+            // allowed credit terms same as Member.
             if (v === "Non-Member" && order.terms === "CREDIT") {
               updateField("terms", "COD");
             }
@@ -832,6 +845,80 @@ export default function VerificationForm({
             alt="Order slip"
             style={{ maxWidth: "100%", height: "auto", display: "block", borderRadius: 8, border: "1px solid #ccc" }}
           />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Member/Non-Member plus a 3rd "Other" button that expands into
+// Staff/Classic C/Wine C sub-buttons underneath (Kareem, 2026-08-20).
+// "Other" itself is never a real value -- it's just the expand toggle;
+// selecting a sub-button sets member_status to that literal string.
+function MemberStatusField({
+  value,
+  onChange,
+  tier = "certain",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  tier?: ConfidenceTier;
+}) {
+  const isOtherValue = OTHER_MEMBER_STATUS_OPTIONS.some((opt) => opt.value === value);
+  // Starts expanded if the order already holds one of these values (e.g.
+  // re-opening a saved Staff slip for edit) -- only checked once on
+  // mount, matching every other field's "trust the initial extraction/
+  // load, then track edits locally" pattern in this form.
+  const [otherExpanded, setOtherExpanded] = useState(isOtherValue);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span style={{ ...fieldLabelStyle, color: tierColor[tier] }}>Member Status</span>
+      <div style={{ display: "flex", gap: 8 }}>
+        {MEMBER_TOGGLE_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => {
+              setOtherExpanded(false);
+              onChange(opt.value);
+            }}
+            style={{
+              ...toggleButtonStyle,
+              ...(value === opt.value ? toggleButtonActiveStyle : null),
+              ...tierInputStyle(tier),
+            }}
+          >
+            {opt.display}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setOtherExpanded((expanded) => !expanded)}
+          style={{
+            ...toggleButtonStyle,
+            ...(isOtherValue ? toggleButtonActiveStyle : null),
+            ...tierInputStyle(tier),
+          }}
+        >
+          Other
+        </button>
+      </div>
+      {otherExpanded && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {OTHER_MEMBER_STATUS_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onChange(opt.value)}
+              style={{
+                ...toggleButtonStyle,
+                ...(value === opt.value ? toggleButtonActiveStyle : null),
+              }}
+            >
+              {opt.display}
+            </button>
+          ))}
         </div>
       )}
     </div>
