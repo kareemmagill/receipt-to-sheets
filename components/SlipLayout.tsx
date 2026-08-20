@@ -17,6 +17,10 @@ export interface SlipLayoutItem {
   description: string;
   itemCode?: string;
   amount: string;
+  // Per-item counterpart to problemFlag below -- reddens just this line
+  // instead of only the slip-wide notice at the bottom (Kareem,
+  // 2026-08-20: "make the item text red").
+  problem?: boolean;
 }
 
 export interface SlipLayoutProps {
@@ -104,13 +108,13 @@ export function SlipLayout({ slipNumber, slipType, customer, waitress, date, mem
         </thead>
         <tbody>
           {items.map((item, i) => (
-            <tr key={i}>
+            <tr key={i} style={item.problem ? { color: "#b00020" } : undefined}>
               <td style={slipTdStyle}>{item.qty}</td>
               <td style={slipTdStyle}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                   <span>
                     {item.description}
-                    {item.itemCode && <span style={{ color: "#999" }}> ({item.itemCode})</span>}
+                    {item.itemCode && <span style={{ color: item.problem ? undefined : "#999" }}> ({item.itemCode})</span>}
                   </span>
                   <span>{item.amount}</span>
                 </div>

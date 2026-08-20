@@ -22,6 +22,7 @@ export function ExistingOrderRecap({ order }: { order: ExistingOrderSummary }) {
         description: item.description,
         itemCode: item.item,
         amount: item.amount,
+        problem: item.problem,
       }))}
       total={total}
       terms={order.terms}

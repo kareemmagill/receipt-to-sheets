@@ -854,6 +854,7 @@ function OrderSummary({ order }: { order: EditableOrder }) {
           description: item.description,
           itemCode: item.item,
           amount: item.amount,
+          problem: item.problem,
         }))}
         total={sumAmounts(order.items)}
         terms={order.terms}
