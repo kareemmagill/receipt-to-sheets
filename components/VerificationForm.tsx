@@ -22,19 +22,31 @@ const MEMBER_TOGGLE_OPTIONS = [
   { value: "Non-Member", display: "Non-Member" },
 ];
 // Sub-categories revealed under an "Other" button (Kareem, 2026-08-20).
-// Deliberately not "Non-Member" for enforcePaymentRule/the free-text
-// customer field/disabledOptionValues purposes below -- all three of
-// those only special-case the literal string "Non-Member", so these fall
-// through to the same behavior as Member (roster-select customer field,
-// credit terms allowed) with no extra code needed -- confirmed with
-// Kareem: unlike an anonymous walk-in, these are named/established
-// account categories, so there's no reason to force them Paid-only.
+// Deliberately not "Non-Member" for enforcePaymentRule/disabledOptionValues
+// below -- both only special-case the literal string "Non-Member", so
+// these fall through to Member's behavior there (credit terms allowed) --
+// confirmed with Kareem: unlike an anonymous walk-in, these are named/
+// established account categories, so there's no reason to force them
+// Paid-only. The Customer field is the one exception -- see
+// isFreeTextCustomerStatus below.
 const OTHER_MEMBER_STATUS_OPTIONS = [
   { value: "Staff", display: "Staff" },
   { value: "Classic C", display: "Classic C" },
   { value: "Wine C", display: "Wine C" },
   { value: "Reciprocal", display: "Reciprocal" },
 ];
+const OTHER_MEMBER_STATUS_VALUES = new Set(OTHER_MEMBER_STATUS_OPTIONS.map((opt) => opt.value));
+
+// None of these four are a fixed roster the way Member is -- forcing the
+// Customer field into roster-select mode for them silently blanked
+// whatever name OCR had already read, since it never matches a real
+// member option (same HTML-select-with-no-matching-option gap already
+// documented on waitressMode above) -- real bug, Kareem, 2026-08-20:
+// "wheb oine of the 4th suboptions are chosed, leave the name as the OCR
+// suggested". Free text for all four, same as Non-Member.
+function isFreeTextCustomerStatus(memberStatus: string): boolean {
+  return memberStatus === "Non-Member" || OTHER_MEMBER_STATUS_VALUES.has(memberStatus);
+}
 const PAID_TOGGLE_OPTIONS = [
   { value: "COD", display: "Paid" },
   { value: "CREDIT", display: "Not Paid" },
@@ -186,7 +198,11 @@ export default function VerificationForm({
   // so nothing breaks if a caller has no photo on hand.
   photoDataUrl?: string;
   onConfirm: (order: EditableOrder) => void;
-  onRetake: () => void;
+  // Undefined hides the button entirely -- only passed for the "editing
+  // an already-saved order" flow (relabeled "Cancel" there), not the
+  // normal fresh-scan Data Entry screen (Kareem, 2026-08-20: "remove the
+  // retake photo button on the process data page").
+  onRetake?: () => void;
   onRetakeLabel?: string;
   confirmLabel?: string;
   saving?: boolean;
@@ -465,12 +481,15 @@ export default function VerificationForm({
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <span style={{ ...fieldLabelStyle, color: tierColor[customerTier] }}>Customer / Name</span>
 
-          {order.member_status === "Non-Member" ? (
-            // Always free text -- a walk-in isn't a fixed roster the way
-            // Members are, so gating behind a dropdown just blocks quick
-            // correction of a misread name. Past walk-in names (never real
-            // members) are offered as chips underneath instead of a
-            // required selection.
+          {isFreeTextCustomerStatus(order.member_status) ? (
+            // Always free text -- none of Non-Member/Staff/Classic C/
+            // Wine C/Reciprocal are a fixed roster the way Member is, so
+            // gating behind a dropdown just blocks quick correction of a
+            // misread name (or, for the four Other sub-types, silently
+            // blanks the OCR-read name entirely -- see
+            // isFreeTextCustomerStatus above). Past walk-in names (never
+            // real members) are offered as chips underneath, but only for
+            // literal Non-Member -- see that condition below.
             <input
               value={order.customer_suggested}
               onChange={(e) => {
@@ -478,7 +497,7 @@ export default function VerificationForm({
                 setCustomerError(null);
                 setWalkInFieldTyped(true);
               }}
-              placeholder="Type walk-in guest's name"
+              placeholder={order.member_status === "Non-Member" ? "Type walk-in guest's name" : "Type customer name"}
               style={{ ...inputStyle, ...tierInputStyle(customerTier) }}
             />
           ) : customerMode === "select" ? (
@@ -824,9 +843,11 @@ export default function VerificationForm({
       )}
 
       <div style={{ display: "flex", gap: 12 }}>
-        <button onClick={onRetake} disabled={saving} style={secondaryButtonStyle}>
-          {onRetakeLabel}
-        </button>
+        {onRetake && (
+          <button onClick={onRetake} disabled={saving} style={secondaryButtonStyle}>
+            {onRetakeLabel}
+          </button>
+        )}
         <button
           onClick={handleConfirmClick}
           disabled={saving || !allItemsApproved}

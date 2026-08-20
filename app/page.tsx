@@ -679,8 +679,8 @@ export default function Home() {
             initialOrder={editingSlipNumber ? (savedOrder ?? undefined) : undefined}
             photoDataUrl={imageDataUrl ?? undefined}
             onConfirm={(order) => handleConfirm(order)}
-            onRetake={editingSlipNumber ? handleCancelEdit : handleRetake}
-            onRetakeLabel={editingSlipNumber ? "Cancel" : "Retake Photo"}
+            onRetake={editingSlipNumber ? handleCancelEdit : undefined}
+            onRetakeLabel="Cancel"
             confirmLabel={editingSlipNumber ? "Save Changes" : "Confirm & Save"}
             saving={saveStatus === "saving"}
           />
