@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePageTitle } from "@/lib/usePageTitle";
+import { useSlipViewer } from "@/lib/useSlipViewer";
+import { SlipViewerModal } from "@/components/SlipViewerModal";
 
 interface Status {
   totalRows: number;
@@ -65,6 +67,13 @@ export default function DevelopmentPage() {
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[] | null>(null);
   const [pendingBusy, setPendingBusy] = useState<"all" | number | null>(null);
   const [pendingError, setPendingError] = useState<string | null>(null);
+
+  // Same combined photo + digitised SlipLayout viewer used on Sales Report
+  // and Members Billing (Kareem, 2026-08-20: "link the slip number to the
+  // digital slip, and open the photo without leaving the site") -- one
+  // hook shared across every screen with a clickable slip number.
+  const { viewingSlip, failedPhotoSlip, setFailedPhotoSlip, slipDetail, slipDetailStatus, viewSlip, closeSlip } =
+    useSlipViewer();
 
   // Used to re-fetch after a delete (not on mount -- see the effect below,
   // which duplicates these fetches inline rather than calling out to these
@@ -317,15 +326,23 @@ export default function DevelopmentPage() {
               {(records ?? []).map((r, i) => (
                 <tr key={`${r.slipNumber || r.arNumber}|${i}`}>
                   <td style={tdStyle}>{r.date || "—"}</td>
-                  <td style={tdStyle}>{r.slipNumber || "—"}</td>
+                  <td style={tdStyle}>
+                    {r.slipNumber ? (
+                      <button type="button" onClick={() => viewSlip(r.slipNumber)} style={slipLinkStyle}>
+                        {r.slipNumber}
+                      </button>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td style={tdStyle}>{r.customer}</td>
                   <td style={tdStyle}>{r.summary}</td>
                   <td style={{ ...tdStyle, textAlign: "right" }}>{formatMoney(r.total)}</td>
                   <td style={tdStyle}>
-                    {r.photoLink ? (
-                      <a href={r.photoLink} target="_blank" rel="noopener noreferrer">
+                    {r.slipNumber && r.photoLink ? (
+                      <button type="button" onClick={() => viewSlip(r.slipNumber)} style={slipLinkStyle}>
                         View
-                      </a>
+                      </button>
                     ) : (
                       "—"
                     )}
@@ -407,9 +424,30 @@ export default function DevelopmentPage() {
           {!pendingUploads && <p style={{ fontSize: 13, color: "#777", margin: 0 }}>Loading…</p>}
         </div>
       </section>
+
+      {viewingSlip && (
+        <SlipViewerModal
+          slipNumber={viewingSlip}
+          slipDetail={slipDetail}
+          slipDetailStatus={slipDetailStatus}
+          failedPhotoSlip={failedPhotoSlip}
+          onFailedPhoto={setFailedPhotoSlip}
+          onClose={closeSlip}
+        />
+      )}
     </main>
   );
 }
+
+const slipLinkStyle: React.CSSProperties = {
+  padding: 0,
+  border: "none",
+  background: "none",
+  color: "#1a73e8",
+  textDecoration: "underline",
+  cursor: "pointer",
+  font: "inherit",
+};
 
 const dangerButtonStyle: React.CSSProperties = {
   padding: "14px 20px",
