@@ -7,32 +7,21 @@ import type { PendingUpload } from "@/lib/pendingUploads";
 import { usePageTitle } from "@/lib/usePageTitle";
 import { savePendingUploadHandoff } from "@/lib/pendingUploadHandoff";
 
-function formatUploadedAt(iso: string): string {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  const hh = String(d.getHours()).padStart(2, "0");
-  const min = String(d.getMinutes()).padStart(2, "0");
-  return `${dd}/${mm}/${yyyy}, ${hh}:${min}`;
-}
-
-// Lists every photo queued by app/upload-slips/page.tsx and lets staff
-// work through them one at a time -- "Process" hands the photo off to the
-// scanner page (via lib/pendingUploadHandoff.ts) so it runs through the
-// exact same extract/verify/save flow as a live scan, not a second copy
-// of that logic (Kareem, 2026-08-20).
+// Just a count + one button, not a thumbnail per row -- with a real
+// backlog (92 slips at the time of this change) a full list is more
+// scrolling than useful (Kareem, 2026-08-20: "no need to show the
+// thumbrint of all, just say, xx slips to be processed, take one").
+// "Take One" hands the oldest queued photo off to the scanner page (via
+// lib/pendingUploadHandoff.ts) so it runs through the exact same
+// extract/verify/save flow as a live scan, not a second copy of that
+// logic.
 export default function ProcessQueuePage() {
   usePageTitle("Process Queue");
   const router = useRouter();
   const [uploads, setUploads] = useState<PendingUpload[] | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
-  // rowNumber of whichever entry is currently being fetched from Drive --
-  // disables every "Process" button, not just the clicked one, since
-  // there's only one scanner page to hand off to at a time.
-  const [loadingRow, setLoadingRow] = useState<number | null>(null);
+  const [taking, setTaking] = useState(false);
 
   function fetchList() {
     fetch("/api/pending-uploads")
@@ -65,21 +54,24 @@ export default function ProcessQueuePage() {
     fetchList();
   }, []);
 
-  async function handleProcess(rowNumber: number) {
-    setLoadingRow(rowNumber);
+  async function handleTakeOne() {
+    if (!uploads || uploads.length === 0) return;
+    const oldest = uploads[0]; // listPendingUploads returns oldest-first
+    setTaking(true);
+    setError(null);
     try {
-      const res = await fetch(`/api/pending-uploads/photo?rowNumber=${rowNumber}`);
+      const res = await fetch(`/api/pending-uploads/photo?rowNumber=${oldest.rowNumber}`);
       const data = await res.json();
       if (!data.ok) {
         setError(data.error ?? "Couldn't load this photo");
-        setLoadingRow(null);
+        setTaking(false);
         return;
       }
-      savePendingUploadHandoff({ rowNumber, imageDataUrl: data.imageDataUrl });
+      savePendingUploadHandoff({ rowNumber: oldest.rowNumber, imageDataUrl: data.imageDataUrl });
       router.push("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-      setLoadingRow(null);
+      setTaking(false);
     }
   }
 
@@ -94,7 +86,7 @@ export default function ProcessQueuePage() {
 
       <p style={{ fontSize: 12, color: "#777", margin: 0 }}>
         Photos uploaded from the <Link href="/upload-slips" style={{ color: "#555" }}>Upload Slips</Link> page,
-        waiting to be read and saved. Processing one opens it in the normal scanner flow.
+        waiting to be read and saved. Taking one opens it in the normal scanner flow.
       </p>
 
       {status === "loading" && <p>Loading…</p>}
@@ -112,35 +104,14 @@ export default function ProcessQueuePage() {
       )}
 
       {status === "ready" && uploads && uploads.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {uploads.map((u) => (
-            <div
-              key={u.rowNumber}
-              style={{ display: "flex", gap: 10, alignItems: "center", border: "1px solid #ddd", borderRadius: 8, padding: 8 }}
-            >
-              {u.photoThumbnailUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={u.photoThumbnailUrl}
-                  alt="Queued slip"
-                  style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6, flexShrink: 0 }}
-                />
-              ) : (
-                <div style={{ width: 56, height: 56, borderRadius: 6, background: "#eee", flexShrink: 0 }} />
-              )}
-              <div style={{ flex: 1, fontSize: 12, color: "#555" }}>
-                {u.uploadedBy && <div>By {u.uploadedBy}</div>}
-                <div>{u.uploadedAt ? formatUploadedAt(u.uploadedAt) : ""}</div>
-              </div>
-              <button
-                onClick={() => handleProcess(u.rowNumber)}
-                disabled={loadingRow !== null}
-                style={buttonStyle}
-              >
-                {loadingRow === u.rowNumber ? "Loading…" : "Process"}
-              </button>
-            </div>
-          ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
+          <p style={{ fontSize: 15, margin: 0 }}>
+            {uploads.length} slip{uploads.length === 1 ? "" : "s"} to be processed.
+          </p>
+          {error && <p style={{ color: "#b00020", fontSize: 13, margin: 0 }}>{error}</p>}
+          <button onClick={handleTakeOne} disabled={taking} style={buttonStyle}>
+            {taking ? "Loading…" : "Take One"}
+          </button>
         </div>
       )}
     </main>
@@ -148,14 +119,13 @@ export default function ProcessQueuePage() {
 }
 
 const buttonStyle: React.CSSProperties = {
-  padding: "8px 14px",
-  fontSize: 13,
-  borderRadius: 6,
+  padding: "14px 20px",
+  fontSize: 16,
+  borderRadius: 8,
   border: "1px solid #333",
   background: "#171717",
   color: "#fff",
   cursor: "pointer",
-  flexShrink: 0,
 };
 
 const inputStyle: React.CSSProperties = {

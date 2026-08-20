@@ -39,7 +39,9 @@ export default function Home() {
   // Retake/Use Photo row in that case (Kareem, 2026-08-20: "when a user
   // selects one of the sample slips, remove the 2 buttons ontop") since
   // there's no real photo to retake; "Return to Home Page" still covers
-  // backing out.
+  // backing out. That row is also hidden whenever pendingQueueRowNumber
+  // is set (a Process Queue photo) -- same reasoning, there's no camera
+  // to retake from (Kareem, 2026-08-20).
   const [isSamplePhoto, setIsSamplePhoto] = useState(false);
   const [lastImageDataUrl, setLastImageDataUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
@@ -550,7 +552,7 @@ export default function Home() {
             style={{ display: "none" }}
           />
 
-          {!(imageDataUrl && isSamplePhoto) && (
+          {!(imageDataUrl && (isSamplePhoto || pendingQueueRowNumber !== null)) && (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button onClick={() => inputRef.current?.click()} style={{ ...buttonStyle, flex: 1 }}>
                 {imageDataUrl ? "Retake Photo" : "Take Photo"}
