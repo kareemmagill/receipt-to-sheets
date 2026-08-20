@@ -29,13 +29,21 @@ export interface SlipLayoutProps {
   items: SlipLayoutItem[];
   total: number;
   terms?: string; // "COD" | "CREDIT" | "" -- omitted entirely if not provided
+  // Set when this slip has an unresolved Problem/Unsure flag (see
+  // components/VerificationForm.tsx) -- prints a notice at the bottom of
+  // every digital slip view, not just the Confirmation screen, since all
+  // of them (Confirmation, Duplicate Slip, Daily Report's slip viewer,
+  // Review Problem Records) render through this same layout (Kareem,
+  // 2026-08-20: "at the bottom of the digital slip write - problem slip
+  // for review").
+  problemFlag?: boolean;
 }
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export function SlipLayout({ slipNumber, slipType, customer, waitress, date, memberStatus, items, total, terms }: SlipLayoutProps) {
+export function SlipLayout({ slipNumber, slipType, customer, waitress, date, memberStatus, items, total, terms, problemFlag }: SlipLayoutProps) {
   const headingLabel = slipType === "Restaurant" ? "FOOD ORDER SLIP" : "ORDER SLIP (BAR)";
   const paymentLabel = terms === "CREDIT" ? "Not Paid" : terms === "COD" ? "Paid" : undefined;
 
@@ -121,6 +129,12 @@ export function SlipLayout({ slipNumber, slipType, customer, waitress, date, mem
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: 13, color: "#555" }}>
           <span>Payment</span>
           <span>{paymentLabel}</span>
+        </div>
+      )}
+
+      {problemFlag && (
+        <div style={{ textAlign: "center", marginTop: 8, padding: "6px 0", borderTop: "1px dashed #b00020", fontSize: 13, fontWeight: 700, color: "#b00020" }}>
+          ❓ PROBLEM SLIP — FOR REVIEW
         </div>
       )}
     </div>

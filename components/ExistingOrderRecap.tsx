@@ -25,6 +25,7 @@ export function ExistingOrderRecap({ order }: { order: ExistingOrderSummary }) {
       }))}
       total={total}
       terms={order.terms}
+      problemFlag={order.items.some((item) => item.problem)}
     />
   );
 }

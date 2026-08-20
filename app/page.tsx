@@ -857,6 +857,7 @@ function OrderSummary({ order }: { order: EditableOrder }) {
         }))}
         total={sumAmounts(order.items)}
         terms={order.terms}
+        problemFlag={order.customer_unsure || order.items.some((item) => item.problem)}
       />
       {order.memo && <p style={{ fontSize: 13, color: "#777", margin: 0 }}>Memo: {order.memo}</p>}
     </div>
