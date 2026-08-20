@@ -22,13 +22,17 @@ export { mostRecentOrderDate } from "./dateNormalize";
 // keep matching the exact handwriting it originally saw, even after the
 // visible Description no longer says that (Kareem, 2026-08-17: "extra
 // rice" -> Rice should still auto-match "extra rice" next time). Problem
-// is the reviewer's own item-level "still needs a closer look" flag (see
-// the Problem button in components/VerificationForm.tsx) -- "TRUE" or
-// blank, read back by lib/problemRecords.ts to build the Review Problem
-// Records list. Re-saving with every Problem toggle cleared is how a
+// is the reviewer's own "still needs a closer look" flag -- written TRUE
+// on a row if either that specific item's Problem button was pressed, or
+// the whole order's Unsure button (next to Customer / Name) was, since
+// there's no separate column for the latter (Kareem, 2026-08-20: "add
+// this record to the problem records to be reviewed later" -- Unsure is
+// order-level, Problem is per-item, but they land in the same column and
+// the same Review Problem Records list). "TRUE" or blank, read back by
+// lib/problemRecords.ts. Re-saving with every flag cleared is how a
 // flagged record gets resolved (Kareem, 2026-08-20: "the user can edit
 // and approve the slip") -- there's no separate approve action, editing
-// and saving with the flag off already writes a clean row.
+// and saving with every flag off already writes a clean row.
 // A leading apostrophe tells Sheets' USER_ENTERED parser to store the value
 // as literal text instead of auto-parsing it — without this, a date-looking
 // string like "8/27/25" gets converted into a date serial number, which
@@ -75,6 +79,6 @@ export function buildSalesOrderRows(
     enteredBy,
     device,
     item.original_description,
-    item.problem ? "TRUE" : "",
+    item.problem || order.customer_unsure ? "TRUE" : "",
   ]);
 }

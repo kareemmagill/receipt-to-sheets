@@ -40,6 +40,7 @@ function buildOrderFromExtraction(extraction: OrderSlipExtraction): EditableOrde
     terms: extraction.terms,
     memo: extraction.memo,
     items: extraction.items.map((item) => ({ ...item, id: makeId("item") })),
+    customer_unsure: false,
   };
 }
 

@@ -9,6 +9,16 @@ import { Spinner } from "@/components/Spinner";
 export type EditableItem = OrderSlipItem & { id: string };
 export type EditableOrder = Omit<OrderSlipExtraction, "items" | "uncertain_fields" | "overall_confidence"> & {
   items: EditableItem[];
+  // Order-level counterpart to a per-item Problem flag -- set via the
+  // "Unsure" button next to Customer / Name when the reviewer can't
+  // confidently identify who the customer actually is (Kareem, 2026-08-20:
+  // "add this record to the problem records to be reviewed later"). Never
+  // set by the vision model. Written into every row's Problem column at
+  // save time (see lib/salesOrderRows.ts) -- there's no separate sheet
+  // column for it, since the Review Problem Records list already just
+  // means "any row on this slip is flagged," regardless of which button
+  // set it.
+  customer_unsure: boolean;
 };
 
 const MANUAL_CUSTOMER = "__MANUAL__";
@@ -136,6 +146,7 @@ function toEditable(extraction: OrderSlipExtraction): EditableOrder {
     terms: extraction.terms,
     memo: extraction.memo,
     items: extraction.items.map((item) => ({ ...item, id: makeId() })),
+    customer_unsure: false,
   };
 }
 
@@ -562,6 +573,14 @@ export default function VerificationForm({
             <span style={{ fontSize: 12, color: "#777" }}>Handwriting read as: &ldquo;{order.customer_written}&rdquo;</span>
           )}
           {customerError && <span style={{ fontSize: 12, color: "#b00020" }}>{customerError}</span>}
+
+          <button
+            type="button"
+            onClick={() => updateField("customer_unsure", !order.customer_unsure)}
+            style={{ ...(order.customer_unsure ? problemButtonActiveStyle : problemButtonStyle), alignSelf: "flex-start" }}
+          >
+            {order.customer_unsure ? "❓ Unsure — will be reviewed" : "Unsure"}
+          </button>
         </div>
 
         <MemberStatusField

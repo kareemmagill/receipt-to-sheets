@@ -110,6 +110,11 @@ export async function GET(req: Request) {
       terms: (first[TERMS_COL] ?? "").trim(),
       memo: (first[MEMO_COL] ?? "").trim(),
       items,
+      // Not persisted separately -- see EditableOrder's own comment.
+      // Whatever caused this slip to show up in Review Problem Records
+      // (a per-item Problem flag, or a prior Unsure press) already carries
+      // over via each item's own `problem` field above.
+      customer_unsure: false,
     };
 
     // Fed to VerificationForm as its `extraction` prop alongside `order` as
