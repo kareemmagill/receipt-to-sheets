@@ -838,7 +838,6 @@ export default function VerificationForm({
 
       {photoDataUrl && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={fieldLabelStyle}>Slip photo, for comparison</span>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={photoDataUrl}
