@@ -5,11 +5,12 @@ export { mostRecentOrderDate } from "./dateNormalize";
 // Matches the real Sales Orders header row exactly: Name, Class, Order Slip
 // Date, Order Slip Number, AR NO. , Terms, Memo, Class, QTY, Invoice Class,
 // Item, Description, Rate, Amount, Waitress, Member Status, Entered At,
-// Entered By, Device, Original Description (Waitress and Member Status
-// added 2026-08-15 as the 15th/16th columns; Entered At/By/Device added
-// 2026-08-17 as the 17th-19th; Original Description added 2026-08-17 as
-// the 20th -- each appended rather than inserted among the existing ones,
-// so nothing that reads this sheet by position gets shifted) — with the
+// Entered By, Device, Original Description, Problem (Waitress and Member
+// Status added 2026-08-15 as the 15th/16th columns; Entered At/By/Device
+// added 2026-08-17 as the 17th-19th; Original Description added 2026-08-17
+// as the 20th; Problem added 2026-08-20 as the 21st -- each appended
+// rather than inserted among the existing ones, so nothing that reads this
+// sheet by position gets shifted) — with the
 // Class column appearing twice (B and H). Class is per-item (Restaurant
 // or Bar, depending on the item), not per-order, so rows for the same
 // order can carry different Class values. Memo holds only the slip's own
@@ -20,7 +21,14 @@ export { mostRecentOrderDate } from "./dateNormalize";
 // reviewer picks a candidate chip) purely so lib/itemCorrections.ts can
 // keep matching the exact handwriting it originally saw, even after the
 // visible Description no longer says that (Kareem, 2026-08-17: "extra
-// rice" -> Rice should still auto-match "extra rice" next time).
+// rice" -> Rice should still auto-match "extra rice" next time). Problem
+// is the reviewer's own item-level "still needs a closer look" flag (see
+// the Problem button in components/VerificationForm.tsx) -- "TRUE" or
+// blank, read back by lib/problemRecords.ts to build the Review Problem
+// Records list. Re-saving with every Problem toggle cleared is how a
+// flagged record gets resolved (Kareem, 2026-08-20: "the user can edit
+// and approve the slip") -- there's no separate approve action, editing
+// and saving with the flag off already writes a clean row.
 // A leading apostrophe tells Sheets' USER_ENTERED parser to store the value
 // as literal text instead of auto-parsing it — without this, a date-looking
 // string like "8/27/25" gets converted into a date serial number, which
@@ -67,5 +75,6 @@ export function buildSalesOrderRows(
     enteredBy,
     device,
     item.original_description,
+    item.problem ? "TRUE" : "",
   ]);
 }

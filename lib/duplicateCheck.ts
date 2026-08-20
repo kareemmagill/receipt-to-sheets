@@ -5,6 +5,10 @@ export interface ExistingOrderItem {
   description: string;
   item: string;
   amount: string;
+  // See lib/salesOrderRows.ts's Problem column -- set when this line was
+  // flagged for extra scrutiny on the verification form and never
+  // resolved (Kareem, 2026-08-20). Read by lib/problemRecords.ts.
+  problem: boolean;
 }
 
 export interface ExistingOrderSummary {
@@ -54,7 +58,8 @@ export interface DuplicateCheckResult {
 // Sales Orders columns: Name(0), Class(1), Order Slip Date(2), Order Slip
 // Number(3), AR NO.(4), Terms(5), Memo(6), Class(7), QTY(8), Invoice
 // Class(9), Item(10), Description(11), Rate(12), Amount(13), Waitress(14),
-// Member Status(15), Entered At(16), Entered By(17), Device(18)
+// Member Status(15), Entered At(16), Entered By(17), Device(18), Original
+// Description(19), Problem(20)
 const NAME_COL = 0;
 const CLASS_COL = 1;
 const DATE_COL = 2;
@@ -71,6 +76,7 @@ const MEMBER_STATUS_COL = 15;
 const ENTERED_AT_COL = 16;
 const ENTERED_BY_COL = 17;
 const DEVICE_COL = 18;
+const PROBLEM_COL = 20;
 
 /**
  * Rows matching a given slip type + number. Bar and Food (Restaurant) order
@@ -133,6 +139,7 @@ export function findExistingOrderBySlip(
       description: (r[DESC_COL] ?? "").trim(),
       item: (r[ITEM_COL] ?? "").trim(),
       amount: (r[AMOUNT_COL] ?? "").trim(),
+      problem: (r[PROBLEM_COL] ?? "").trim().toUpperCase() === "TRUE",
     })),
   };
 }

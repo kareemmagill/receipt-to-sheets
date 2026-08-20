@@ -19,6 +19,7 @@ import { formatEnteredAt } from "@/lib/formatEnteredAt";
 import type { ApiUsageSummary } from "@/lib/apiUsageLog";
 import { USD_TO_PHP_RATE } from "@/lib/apiCost";
 import { takePendingUploadHandoff } from "@/lib/pendingUploadHandoff";
+import { takeProblemRecordHandoff } from "@/lib/problemRecordHandoff";
 
 // Cap for the copy archived to Google Drive on save -- lowered from 2200
 // to 800 (Kareem, 2026-08-17) to keep uploads faster and Drive usage
@@ -114,6 +115,19 @@ export default function Home() {
   // waiting icon". Same Spinner + disabled-button pattern already used for
   // handleProcess above.
   const [loadingNextSlip, setLoadingNextSlip] = useState(false);
+  // How many saved slips still have a Problem-flagged item -- shown as a
+  // badge on the "Review Problem Records" button, same idea as
+  // pendingQueueCount above.
+  const [problemRecordCount, setProblemRecordCount] = useState(0);
+  // Set while the currently-open Data Entry form was loaded from the
+  // Review Problem Records page rather than a live scan or an in-session
+  // "Edit" (see lib/problemRecordHandoff.ts) -- only changes which handler
+  // backs the form's Cancel button: a live-session edit shows the fake
+  // "already saved" confirmation screen on cancel (handleCancelEdit,
+  // correct there since it really was just saved this session), but that
+  // would be misleading here, so this routes Cancel to a full reset
+  // (handleRetake) instead (Kareem, 2026-08-20).
+  const [reviewingProblemSlip, setReviewingProblemSlip] = useState(false);
 
   useEffect(() => {
     fetch("/api/usage-total")
@@ -134,6 +148,15 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    fetch("/api/problem-records")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.ok) setProblemRecordCount(data.slips.length);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     // Deferred via .then(), same reasoning as the userName prompt effect
     // above -- keeps the setState calls out of the synchronous effect body.
     Promise.resolve().then(() => {
@@ -148,6 +171,32 @@ export default function Home() {
       setDuplicateSlip(null);
       setImageDataUrl(handoff.imageDataUrl);
       setPendingQueueRowNumber(handoff.rowNumber);
+    });
+  }, []);
+
+  useEffect(() => {
+    // Same deferred-.then() reasoning as the pending-upload handoff effect
+    // above. Loads a flagged slip straight into the edit flow -- reuses
+    // editingSlipNumber/savedOrder exactly like the post-save "Edit" flow
+    // does, so onConfirm's replaceSlipNumber logic needs no changes.
+    Promise.resolve().then(() => {
+      const handoff = takeProblemRecordHandoff();
+      if (!handoff) return;
+      setStatus("idle");
+      setError(null);
+      setSaveStatus("idle");
+      setSaveError(null);
+      setExistingOrder(null);
+      setDuplicateSlip(null);
+      setIsSamplePhoto(false);
+      setPendingQueueRowNumber(null);
+      setJustSavedFromQueue(false);
+      setImageDataUrl(handoff.imageDataUrl);
+      setItemTemplate(handoff.itemTemplate);
+      setExtraction(handoff.extraction);
+      setSavedOrder(handoff.order);
+      setEditingSlipNumber(handoff.order.order_slip_number);
+      setReviewingProblemSlip(true);
     });
   }, []);
 
@@ -324,6 +373,7 @@ export default function Home() {
     setIsSamplePhoto(false);
     setPendingQueueRowNumber(null);
     setJustSavedFromQueue(false);
+    setReviewingProblemSlip(false);
   }
 
   function handleEditSaved() {
@@ -385,6 +435,16 @@ export default function Home() {
       setEditingSlipNumber(null);
       setExistingOrder(null);
       setSaveStatus("success");
+
+      // Best-effort, fire-and-forget -- this save may have just cleared
+      // (or newly set) a Problem flag, so the landing page's badge and
+      // the Review Problem Records list should reflect that on next look.
+      fetch("/api/problem-records")
+        .then((res) => res.json())
+        .then((problemData) => {
+          if (problemData.ok) setProblemRecordCount(problemData.slips.length);
+        })
+        .catch(() => {});
 
       // Only now that the slip actually saved -- clears this photo out of
       // the Process Queue. Stays on the confirmation screen rather than
@@ -636,6 +696,13 @@ export default function Home() {
               >
                 Process Queue{pendingQueueCount ? ` (${pendingQueueCount})` : ""}
               </Link>
+
+              <Link
+                href="/review-problems"
+                style={{ ...buttonStyle, textAlign: "center", textDecoration: "none", display: "block" }}
+              >
+                Review Problem Records{problemRecordCount ? ` (${problemRecordCount})` : ""}
+              </Link>
             </>
           )}
         </>
@@ -688,7 +755,7 @@ export default function Home() {
             initialOrder={editingSlipNumber ? (savedOrder ?? undefined) : undefined}
             photoDataUrl={imageDataUrl ?? undefined}
             onConfirm={(order) => handleConfirm(order)}
-            onRetake={editingSlipNumber ? handleCancelEdit : undefined}
+            onRetake={editingSlipNumber ? (reviewingProblemSlip ? handleRetake : handleCancelEdit) : undefined}
             onRetakeLabel="Cancel"
             confirmLabel={editingSlipNumber ? "Save Changes" : "Confirm & Save"}
             saving={saveStatus === "saving"}

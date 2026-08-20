@@ -108,6 +108,14 @@ export interface OrderSlipItem {
   // Best-guess Inventory matches for this line — filled in server-side, not
   // part of what the vision model returns.
   candidates?: { description: string; itemCode: string; score: number }[];
+  // Set by the reviewer on the verification form when they couldn't
+  // confidently make sense of this line (Kareem, 2026-08-20: "flag this
+  // record for extra scrutiny because there was problem with understadning
+  // item(s) on the form") -- never touches whether the order can still be
+  // saved, just marks it for a second look later via the Review Problem
+  // Records page (see lib/problemRecords.ts). Never set by the vision
+  // model itself.
+  problem?: boolean;
 }
 
 export interface OrderSlipExtraction {

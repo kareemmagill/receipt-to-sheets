@@ -355,27 +355,11 @@ export default function VerificationForm({
     setResolvedItems((prev) => new Set(prev).add(id));
   }
 
-  function deleteItem(id: string) {
-    if (!confirm("Sure to remove item?")) return;
-    setOrder((prev) => ({ ...prev, items: prev.items.filter((item) => item.id !== id) }));
-    setApprovedItems((prev) => {
-      if (!prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-    setExpandedSuggestions((prev) => {
-      if (!prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-    setResolvedItems((prev) => {
-      if (!prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
+  function toggleItemProblem(id: string) {
+    setOrder((prev) => ({
+      ...prev,
+      items: prev.items.map((item) => (item.id === id ? { ...item, problem: !item.problem } : item)),
+    }));
   }
 
   function addItem() {
@@ -805,8 +789,12 @@ export default function VerificationForm({
               </div>
 
               <div style={{ display: "flex", gap: 6 }}>
-                <button type="button" onClick={() => deleteItem(item.id)} style={removeButtonStyle}>
-                  Remove
+                <button
+                  type="button"
+                  onClick={() => toggleItemProblem(item.id)}
+                  style={item.problem ? problemButtonActiveStyle : problemButtonStyle}
+                >
+                  {item.problem ? "❓ Problem" : "Problem"}
                 </button>
                 <button
                   type="button"
@@ -1187,16 +1175,28 @@ const chipButtonStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-// Red, distinct from the neutral secondaryButtonStyle -- Remove is
-// destructive (Kareem, 2026-08-17).
-const removeButtonStyle: React.CSSProperties = {
+// Neutral until pressed -- flips to red + a "?" icon once active, the same
+// red as the confidence-tier "low" color but a distinct control from it
+// (Kareem, 2026-08-20: "goes to Red with a '?' icon"). Replaces the old
+// per-item Remove button -- flagging a line for extra scrutiny turned out
+// to be more useful day-to-day than deleting it outright, and still lets
+// Confirm & Save go through (see toggleItemProblem).
+const problemButtonStyle: React.CSSProperties = {
   padding: "10px 16px",
   fontSize: 14,
   borderRadius: 8,
-  border: "1px solid #b00020",
+  border: "1px solid #999",
   background: "#fff",
-  color: "#b00020",
+  color: "#555",
   cursor: "pointer",
+};
+
+const problemButtonActiveStyle: React.CSSProperties = {
+  ...problemButtonStyle,
+  border: "1px solid #b00020",
+  background: "#b00020",
+  color: "#fff",
+  fontWeight: 600,
 };
 
 const suggestionsToggleStyle: React.CSSProperties = {
