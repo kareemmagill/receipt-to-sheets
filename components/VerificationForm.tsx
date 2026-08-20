@@ -276,8 +276,13 @@ export default function VerificationForm({
   const total = order.items.reduce((sum, item) => sum + (parseNumeric(item.amount) ?? 0), 0);
   // .every() on an empty array is true -- fine here, there's nothing to
   // approve if every item was removed, though the items-required check
-  // elsewhere still blocks a zero-item save.
-  const allItemsApproved = order.items.every((item) => approvedItems.has(item.id));
+  // elsewhere still blocks a zero-item save. A Problem-flagged item counts
+  // as reviewed too -- Kareem, 2026-08-20: "approve every item or flagg a
+  // problem before saving". Fixes a real gap from the same day's earlier
+  // Problem-button change: flagging a line was supposed to "still allow
+  // the confirm and save button to work" but never actually satisfied this
+  // gate, since it only ever checked approvedItems.
+  const allItemsReviewed = order.items.every((item) => approvedItems.has(item.id) || item.problem);
 
   const likelyMatches = (extraction.customer_matches ?? []).filter((m) => m.score >= 0.3);
   const likelyNames = new Set(likelyMatches.map((m) => m.name));
@@ -408,7 +413,7 @@ export default function VerificationForm({
       setCustomerError("Select or enter a customer before saving.");
       return;
     }
-    if (!allItemsApproved) return; // button is disabled in this state; belt and suspenders
+    if (!allItemsReviewed) return; // button is disabled in this state; belt and suspenders
     setCustomerError(null);
     onConfirm(order);
   }
@@ -826,8 +831,8 @@ export default function VerificationForm({
         disabledOptionValues={order.member_status === "Non-Member" ? ["CREDIT"] : []}
       />
 
-      {!allItemsApproved && (
-        <p style={{ fontSize: 12, color: "#b8860b", margin: 0 }}>Approve every item above before saving.</p>
+      {!allItemsReviewed && (
+        <p style={{ fontSize: 12, color: "#b8860b", margin: 0 }}>Approve or flag every item above before saving.</p>
       )}
 
       <div style={{ display: "flex", gap: 12 }}>
@@ -838,8 +843,8 @@ export default function VerificationForm({
         )}
         <button
           onClick={handleConfirmClick}
-          disabled={saving || !allItemsApproved}
-          style={{ ...primaryButtonStyle, flex: 1, ...(!allItemsApproved ? disabledButtonStyle : null) }}
+          disabled={saving || !allItemsReviewed}
+          style={{ ...primaryButtonStyle, flex: 1, ...(!allItemsReviewed ? disabledButtonStyle : null) }}
         >
           {saving && <Spinner />}
           {saving ? "Saving…" : confirmLabel}
