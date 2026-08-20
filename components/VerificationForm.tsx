@@ -33,6 +33,7 @@ const OTHER_MEMBER_STATUS_OPTIONS = [
   { value: "Staff", display: "Staff" },
   { value: "Classic C", display: "Classic C" },
   { value: "Wine C", display: "Wine C" },
+  { value: "Reciprocal", display: "Reciprocal" },
 ];
 const PAID_TOGGLE_OPTIONS = [
   { value: "COD", display: "Paid" },

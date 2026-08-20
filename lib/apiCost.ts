@@ -107,12 +107,15 @@ export const VERCEL_PRO_COST_USD_PER_MONTH = 20;
 // app's own ongoing runtime API/hosting spend above, so it's shown on its
 // own and deliberately excluded from the projected-monthly-cost math
 // (Kareem, 2026-08-19: "add an AI development cost, i.e. what i have paid
-// for use of claude to this list"). Real Console usage data couldn't
-// cleanly separate Kareem's own Claude Code usage from the app's own
-// production API traffic (same account/models), so this uses one month
-// of Claude Pro ($20/month, verified against claude.com/pricing
-// 2026-08-19 -- the monthly-billed rate, not the $17/mo annual-commitment
-// rate) as a stand-in proxy instead (Kareem: "lets just factor in one
-// month of claude pro as the development cost"). In PHP, same "all in
-// PHP" reasoning as HOSTING_COST_PHP_PER_MONTH above.
-export const DEVELOPMENT_COST_PHP: number | null = 20 * USD_TO_PHP_RATE;
+// for use of claude to this list"). Originally a one-month-of-Claude-Pro
+// stand-in (real Console data couldn't cleanly separate dev usage from
+// the app's own production traffic); superseded 2026-08-20 with a real
+// figure from the Claude Console's Cost view, filtered to the
+// "receipt-to-sheets" API key, Month to date: $11.68. Note this key is
+// the same one the deployed app itself uses, so this total still
+// overlaps with (is not strictly additional to) the "Usage So Far"
+// section's own tracked total -- kept as Kareem's own chosen figure
+// rather than netting anything out, since he filtered to this exact
+// Console view deliberately. In PHP, same "all in PHP" reasoning as
+// HOSTING_COST_PHP_PER_MONTH above.
+export const DEVELOPMENT_COST_PHP: number | null = 11.68 * USD_TO_PHP_RATE;
