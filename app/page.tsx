@@ -109,11 +109,15 @@ export default function Home() {
   // How many photos are sitting in the Process Queue -- shown as a badge
   // on that button so staff can see there's backlog without opening it.
   const [pendingQueueCount, setPendingQueueCount] = useState(0);
-  // "Next Slip" does two real awaited round trips (list fetch, then a
-  // Drive photo fetch) before the next photo appears -- Kareem, 2026-08-20:
-  // "seems slow to work, perhaps its because loading. can you add a
-  // waiting icon". Same Spinner + disabled-button pattern already used for
-  // handleProcess above.
+  // Shared by the landing page's "Process Queue" button and the
+  // confirmation screen's "Next Slip" button (both call
+  // handleProcessNextInQueue) -- it does two real awaited round trips
+  // (list fetch, then a Drive photo fetch) before the next photo appears,
+  // so both buttons show a Spinner + disabled state while it runs
+  // (Kareem, 2026-08-20: "seems slow to work... can you add a waiting
+  // icon"; 2026-08-21: same treatment extended when the landing page
+  // button was changed to skip straight to loading the next slip instead
+  // of opening the old /process-queue page first).
   const [loadingNextSlip, setLoadingNextSlip] = useState(false);
   // How many saved slips still have a Problem-flagged item -- shown as a
   // badge on the "Review Problem Records" button, same idea as
@@ -491,8 +495,11 @@ export default function Home() {
   // straight back on the loaded-photo screen for the next slip. Requires
   // still tapping "Process Order Slip" per slip (never auto-extracts) --
   // OCR is a real API cost, and every slip still needs a deliberate human
-  // look before it's even read. Only ever called from the confirmation
-  // screen's "Next Slip" button, never automatically.
+  // look before it's even read. Called from both the landing page's
+  // "Process Queue" button (skips the old intermediate /process-queue
+  // page entirely -- Kareem, 2026-08-21: "go direct to the next page")
+  // and the confirmation screen's "Next Slip" button -- never
+  // automatically.
   async function handleProcessNextInQueue() {
     setLoadingNextSlip(true);
     try {
@@ -690,12 +697,16 @@ export default function Home() {
                 Upload Slips
               </Link>
 
-              <Link
-                href="/process-queue"
-                style={{ ...buttonStyle, textAlign: "center", textDecoration: "none", display: "block" }}
+              <button
+                onClick={handleProcessNextInQueue}
+                disabled={loadingNextSlip || pendingQueueCount === 0}
+                style={{ ...buttonStyle, textAlign: "center", width: "100%" }}
               >
-                Process Queue{pendingQueueCount ? ` (${pendingQueueCount})` : ""}
-              </Link>
+                {loadingNextSlip && <Spinner />}
+                {loadingNextSlip
+                  ? "Loading…"
+                  : `Process Queue${pendingQueueCount ? ` (${pendingQueueCount})` : ""}`}
+              </button>
 
               <Link
                 href="/review-problems"
