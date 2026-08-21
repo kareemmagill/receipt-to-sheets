@@ -12,6 +12,8 @@
 // a separate column; a total; and (not on the paper itself, but the
 // digital equivalent of "pd.") a payment status.
 
+import { formatItemDescription } from "@/lib/formatItemDescription";
+
 export interface SlipLayoutItem {
   qty: string;
   description: string;
@@ -113,7 +115,7 @@ export function SlipLayout({ slipNumber, slipType, customer, waitress, date, mem
               <td style={slipTdStyle}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                   <span>
-                    {item.description}
+                    {formatItemDescription(item.description)}
                     {item.itemCode && <span style={{ color: item.problem ? undefined : "#999" }}> ({item.itemCode})</span>}
                   </span>
                   <span>{item.amount}</span>

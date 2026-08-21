@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readTab } from "@/lib/googleSheets";
+import { formatItemDescription } from "@/lib/formatItemDescription";
 
 // Sales Orders columns: Name(0), Class(1), Order Slip Date(2), Order Slip
 // Number(3), AR NO.(4) ... QTY(8) ... Description(11) ... Amount(13) -- see
@@ -62,7 +63,7 @@ function buildRecords(dataRows: string[][]): Record[] {
 
     const total = group.reduce((sum, r) => sum + (parseFloat(r[AMOUNT_COL]) || 0), 0);
     const summary = group
-      .map((r) => `${(r[QTY_COL] ?? "").trim() || "?"}x${(r[DESC_COL] ?? "").trim() || "?"}`)
+      .map((r) => `${(r[QTY_COL] ?? "").trim() || "?"}x${formatItemDescription((r[DESC_COL] ?? "").trim()) || "?"}`)
       .join(" ");
 
     records.push({

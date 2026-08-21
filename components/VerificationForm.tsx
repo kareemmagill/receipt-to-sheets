@@ -5,6 +5,7 @@ import type { OrderSlipExtraction, OrderSlipItem, UncertainField } from "@/lib/e
 import { makeId } from "@/lib/makeId";
 import { matchItemCodeCandidates, ITEM_MATCH_CONFIDENT_THRESHOLD, type ItemCodeEntry } from "@/lib/itemCodeScoring";
 import { Spinner } from "@/components/Spinner";
+import { formatItemDescription } from "@/lib/formatItemDescription";
 
 export type EditableItem = OrderSlipItem & { id: string };
 export type EditableOrder = Omit<OrderSlipExtraction, "items" | "uncertain_fields" | "overall_confidence"> & {
@@ -755,7 +756,7 @@ export default function VerificationForm({
                         onClick={() => applyItemCandidate(item.id, c)}
                         style={chipButtonStyle}
                       >
-                        {c.description} ({Math.round(c.score * 100)}%)
+                        {formatItemDescription(c.description)} ({Math.round(c.score * 100)}%)
                       </button>
                     ))}
                   </div>
@@ -780,7 +781,7 @@ export default function VerificationForm({
                       }}
                       style={chipButtonStyle}
                     >
-                      {c.description} ({Math.round(c.score * 100)}%)
+                      {formatItemDescription(c.description)} ({Math.round(c.score * 100)}%)
                     </button>
                   ))}
                   <button type="button" onClick={() => toggleSuggestions(item.id)} style={chipButtonStyle}>
